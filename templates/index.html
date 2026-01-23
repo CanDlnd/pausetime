@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+
+    <!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-SH1TFCKHB0"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-SH1TFCKHB0');
+</script>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ezan Vakti Müzik Kontrolü - Otomatik Müzik Durdurma</title>
+
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Ezan vakitlerinde otomatik müzik durdurma ve devam ettirme sistemi. Şehir bazlı ezan vakitleri ile müziğiniz ibadet saatlerine uyum sağlar.">
+    <meta name="keywords" content="ezan vakitleri, ezan saati, müzik durdurma, otomatik müzik kontrolü, YouTube müzik durdurma, ezan anında müzik kesme, ezan zamanı müzik kapatma">
+    <meta name="author" content="Ezan Vakti Müzik Kontrolü">
+
+    <!-- Open Graph Meta Tags (Sosyal Medya Paylaşımları İçin) -->
+    <meta property="og:title" content="Ezan Vakti Müzik Kontrolü">
+    <meta property="og:description" content="Ezan vakitlerinde müziğiniz otomatik olarak durur ve ezan bitiminde devam eder. Kesintisiz müzik keyfi ve ibadete saygı!">
+    <meta property="og:image" content="{{ url_for('static', filename='icons/mosque-solid.png') }}">
+    <meta property="og:url" content="https://ezan-vakti.onrender.com/">
+    <meta property="og:type" content="website">
+
+    <!-- Twitter Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Ezan Vakti Müzik Kontrolü">
+    <meta name="twitter:description" content="Ezan vakitlerinde otomatik müzik durdurma sistemi ile ibadetinize saygı gösterin.">
+    <meta name="twitter:image" content="{{ url_for('static', filename='icons/mosque-solid.png') }}">
+    <meta name="google-site-verification" content="gEV4FXXix8AgMcCz2A25k0SzV-kBIvmRT-7SdvSNb50" />
+
+    <!-- Google ve Bing için Site Doğrulama -->
+    <meta name="google-site-verification" content="GOOGLE_DOĞRULAMA_KODU">
+    <meta name="msvalidate.01" content="BING_DOĞRULAMA_KODU">
+
+    <!-- Schema.org Yapısal Veri (Google İçin) -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Ezan Vakti Müzik Kontrolü",
+        "url": "https://ezan-vakti.onrender.com/",
+        "description": "Ezan vakitlerine göre müziği otomatik durduran ve devam ettiren web uygulaması.",
+        "publisher": {
+            "@type": "Organization",
+            "name": "Ezan Vakti",
+            "logo": "https://ezan-vakti.onrender.com//static/icons/mosque-solid.png"
+        }
+    }
+    </script>
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#2196F3">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="Ezan Vakti">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-152x152.png') }}">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='icons/mosque-solid.png') }}">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+
+<body class="bg-light">
+    <nav class="main-nav">
+        <div class="nav-left">
+            <a href="#" class="nav-brand">
+                <i class="fas fa-mosque"></i> Ezan Vakti Müzik Kontrolü
+            </a>
+            <div class="nav-menu">
+                <a href="#home" class="nav-item active"><i class="fas fa-home"></i> Ana Sayfa</a>
+                <a href="#city-selection" class="nav-item"><i class="fas fa-map-marker-alt"></i> Şehir Seçimi</a>
+                <a href="#settings" class="nav-item"><i class="fas fa-clock"></i> Alarm Ekle</a>
+                <a href="#music-player" class="nav-item"><i class="fas fa-music"></i> Müzik Oynatıcı</a>
+                <a href="#prayer-times" class="nav-item"><i class="fas fa-clock"></i> Ezan Vakitleri</a>
+            </div>
+        </div>
+        <div class="nav-info">
+            <div class="current-time-info">
+                <div class="time-label">GÜNCEL SAAT</div>
+                <div class="time-value" id="currentTime">12:40:26</div>
+                <div class="date-value" id="currentDate">17 Mart 2025 Pazartesi</div>
+            </div>
+            <div class="next-prayer-info">
+                <div class="next-prayer-label">SONRAKİ EZAN:</div>
+                <div class="next-prayer-name" id="nextPrayerName">Öğle</div>
+                <div class="next-prayer-countdown" id="nextPrayerCountdown">01:18:40</div>
+            </div>
+        </div>
+        <button class="nav-toggle">
+            <i class="fas fa-bars"></i>
+        </button>
+    </nav>
+    
+    <div class="container">
+        <div class="header section-highlight" id="home">
+            <h1><i class="fas fa-mosque"></i> Ezan Vakti Müzik Kontrolü</h1>
+            <p class="subtitle"><b>Müziğiniz ezanı hissediyor!</b> Ezan vakitlerinde Müzik otomatik olarak durur ve bildirimde kaldığınız yerden devam eder. Hiçbir şeye dokunmadan, hem ibadete saygı hem kesintisiz Müzik keyfi!</p>
+        </div>
+
+        <div class="card city-selector section-highlight" id="city-selection">
+            <div class="card-content">
+                <h2><i class="fas fa-map-marker-alt"></i> Şehir Seçimi</h2>
+                <div class="city-selection">
+                    <select id="city-select" class="city-dropdown">
+                        <option value="">Şehir Seçiniz...</option>
+                    </select>
+                    <button id="updateCityButton" class="btn-primary">
+                        <i class="fas fa-sync-alt"></i> Güncelle
+                    </button>
+                </div>
+                <p id="selectedCity" class="selected-city-text">Seçili Şehir: İstanbul</p>
+            </div>
+        </div>
+
+        <!-- Alarm Kontrolü Kartı -->
+        <div class="card alarm-control-card section-highlight" id="settings">
+            <div class="card-header">
+                <h2><i class="fas fa-clock"></i> Alarm Ekle </h2>
+                <p class="subtitle">Müziği otomatik başlatmak veya durdurmak için alarm ekleyin.</p>
+            </div>
+            <div class="card-content">
+                <div class="alarm-form">
+                   <div class="alarm-form-container">
+                    <div class="time-picker-row">
+                        <div class="time-input-group">
+                            <label>
+                                <i class="fas fa-clock"></i>
+                                Saat
+                            </label>
+                            <div class="time-picker-wrapper">
+                                <div class="select-wrapper">
+                                    <select id="hourSelect" class="time-select">                                  
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="time-input-group">
+                            <label>
+                                <i class="fas fa-clock"></i>
+                                Dakika
+                            </label>
+                            <div class="time-picker-wrapper">
+                                <div class="select-wrapper">
+                                    <select id="minuteSelect" class="time-select">
+                                    </select>
+                                </div>
+                            </div>
+                        </div>          
+                    </div>
+
+                    <div class="action-select-group">
+                        <label>
+                            <i class="fas fa-tasks"></i>
+                            İşlem Seçin
+                        </label>
+                        <div class="select-wrapper">
+                            <select id="alarmAction" class="alarm-action" required>
+                                <option value="" disabled selected>İşlem seçin...</option>
+                                <option value="start">Müziği Başlat</option>
+                                <option value="stop">Müziği Durdur</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button class="btn-add-alarm" id="setAlarm">
+                        <i class="fas fa-plus"></i>
+                        <span>Alarm Ekle</span>
+                    </button>
+                    </div>  
+                </div>
+
+                <div class="active-alarms-section">
+                    <h3>
+                        <i class="fas fa-list"></i>
+                        <span>Aktif Alarmlar</span>
+                        <span class="alarm-count" id="alarmCount">0</span>
+                    </h3>
+                    <div id="activeAlarms" class="active-alarms"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card music-player section-highlight" id="music-player">
+            <div class="card-content">
+                <h2><i class="fas fa-music"></i> Müzik Oynatıcı</h2>
+
+                <!-- Müzik Kaynağı Seçimi -->
+                <div class="music-source-selector">
+                    <button class="source-btn active" data-source="youtube">
+                        <i class="fab fa-youtube"></i> YouTube
+                    </button>
+                    <button class="source-btn" data-source="local">
+                        <i class="fas fa-file-audio"></i> Yerel Müzik
+                    </button>
+                </div>
+
+                <!-- YouTube Player Container -->
+                <div class="player-container" id="youtube-container">
+                    <div class="youtube-container">
+                        <div id="youtube-player"></div>
+                        <div id="player-overlay" class="player-overlay hidden">
+                            <i class="fas fa-ban"></i>
+                            <span>Ezan okunurken video kontrolü devre dışıdır</span>
+                            <button id="resumeButton" class="btn-resume hidden">
+                                <i class="fas fa-play"></i> Devam Et
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="video-url-input">
+                        <input type="text" id="video-url" placeholder="YouTube video URL'sini yapıştırın">
+                        <button class="btn-primary" onclick="loadVideo()">
+                            <i class="fas fa-plus"></i> Video Yükle
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Local Audio Player Container -->
+                <div class="player-container hidden" id="local-container">
+                    <div class="local-audio-container">
+                        <audio id="local-audio" controls>
+                            Your browser does not support the audio element.
+                        </audio>
+                        <div id="audio-overlay" class="player-overlay hidden">
+                            <i class="fas fa-ban"></i>
+                            <span>Ezan okunurken müzik kontrolü devre dışıdır</span>
+                            <button id="resumeAudioButton" class="btn-resume hidden">
+                                <i class="fas fa-play"></i> Devam Et
+                            </button>
+                        </div>
+                    </div>
+                    <div class="audio-file-input">
+                        <input type="file" id="audioFile" accept="audio/*" class="file-input">
+                        <label for="audioFile" class="btn-primary">
+                            <fileButton><i class="fas fa-upload"></i> Müzik Dosyası Seç</fileButton>
+                        </label>
+                        <span class="selected-file"></span>
+                    </div>
+                </div>
+
+                <!-- Ortak Kontroller -->
+                <div class="control-buttons">
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill"></div>
+                        </div>
+                        <div class="time-display">
+                            <span class="current-time">0:00</span>
+                            <span class="duration">0:00</span>
+                        </div>
+                    </div>
+                    <div class="controls-row">
+                        <div class="left-controls">
+                            <button class="btn-control" id="playButton" onclick="togglePlay()"
+                                data-action="Oynat/Duraklat">
+                                <i class="fas fa-play"></i>
+                            </button>
+                            <button class="btn-control" id="muteButton" onclick="toggleMute()"
+                                data-action="Sesi Kapat/Aç">
+                                <i class="fas fa-volume-up"></i>
+                            </button>
+                            <div class="volume-control">
+                                <input type="range" id="volume-slider" min="0" max="100" value="100">
+                            </div>
+                        </div>
+                        <div class="right-controls">
+                            <button class="btn-control" id="fullscreenButton" onclick="toggleFullscreen()" data-action="Tam Ekran">
+                                <i class="fas fa-expand"></i>
+                            </button>
+                            <button class="btn-control" id="loopButton" onclick="toggleLoop()" data-action="Döngü">
+                                <i class="fas fa-redo"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="status-message" class="status-message"></div>
+            </div>
+        </div>
+
+        <div class="card prayer-times section-highlight" id="prayer-times">
+            <div class="card-content">
+                <div class="prayer-view-toggle">
+                    <button class="view-btn active" data-view="daily">
+                        <i class="fas fa-calendar-day"></i> Günlük
+                    </button>
+                    <button class="view-btn" data-view="weekly">
+                        <i class="fas fa-calendar-week"></i> Haftalık
+                    </button>
+                </div>
+
+                <!-- Günlük Görünüm -->
+                <div id="daily-view" class="prayer-view active">
+                    <h2><i class="fas fa-clock"></i> Günlük Ezan Vakitleri</h2>
+                    <div class="prayer-grid" id="prayer-times-container">
+                        <div class="prayer-item" data-prayer="fajr">
+                            <i class="fas fa-sun"></i>
+                            <div class="prayer-info">
+                                <span class="prayer-name">Sabah</span>
+                                <span class="prayer-time" id="fajr-time">--:--</span>
+                                <span class="countdown"></span>
+                            </div>
+                        </div>
+                        <div class="prayer-item" data-prayer="dhuhr">
+                            <i class="fas fa-sun"></i>
+                            <div class="prayer-info">
+                                <span class="prayer-name">Öğle</span>
+                                <span class="prayer-time" id="dhuhr-time">--:--</span>
+                                <span class="countdown"></span>
+                            </div>
+                        </div>
+                        <div class="prayer-item" data-prayer="asr">
+                            <i class="fas fa-sun"></i>
+                            <div class="prayer-info">
+                                <span class="prayer-name">İkindi</span>
+                                <span class="prayer-time" id="asr-time">--:--</span>
+                                <span class="countdown"></span>
+                            </div>
+                        </div>
+                        <div class="prayer-item" data-prayer="maghrib">
+                            <i class="fas fa-moon"></i>
+                            <div class="prayer-info">
+                                <span class="prayer-name">Akşam</span>
+                                <span class="prayer-time" id="maghrib-time">--:--</span>
+                                <span class="countdown"></span>
+                            </div>
+                        </div>
+                        <div class="prayer-item" data-prayer="isha">
+                            <i class="fas fa-moon"></i>
+                            <div class="prayer-info">
+                                <span class="prayer-name">Yatsı</span>
+                                <span class="prayer-time" id="isha-time">--:--</span>
+                                <span class="countdown"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Haftalık Görünüm -->
+                <div id="weekly-view" class="prayer-view">
+                    <h2><i class="fas fa-calendar-week"></i> Haftalık Ezan Vakitleri</h2>
+                    <div class="weekly-prayer-times" id="weekly-prayer-container">
+                        <!-- Haftalık veriler JavaScript ile doldurulacak -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="footer">
+            <p>&copy; 2025 Ezan Vakti Müzik Kontrolü | Tüm hakları saklıdır.</p>
+        </footer>
+    </div>
+
+    <!-- Tam Ekran Uyarı -->
+    <div id="prayer-alert" class="prayer-alert">
+        <div class="alert-content">
+            <div class="alert-icon">
+                <i class="fas fa-mosque"></i>
+            </div>
+            <h2 id="alert-title">Ezan Vakti</h2>
+            <p id="alert-message"></p>
+            <audio id="alert-sound" src="{{ url_for('static', filename='sounds/alert.mp3') }}"></audio>
+            <button id="close-alert" class="btn-primary">
+                <i class="fas fa-times"></i> Kapat
+            </button>
+        </div>
+    </div>
+
+    <!-- YouTube API -->
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/static/sw.js')
+                    .then((registration) => {
+                        console.log('ServiceWorker registration successful');
+                    })
+                    .catch((err) => {
+                        console.log('ServiceWorker registration failed: ', err);
+                    });
+            });
+        }
+    </script>
+
+    <script>
+        // Şehir listesini yükle
+        async function loadCities() {
+            try {
+                const response = await fetch('/api/cities');
+                const data = await response.json();
+                if (data.success) {
+                    const citySelect = document.getElementById('city-select');
+                    citySelect.innerHTML = '<option value="">Şehir Seçiniz...</option>';
+                    
+                    data.cities.forEach(city => {
+                        const option = document.createElement('option');
+                        option.value = city;
+                        // Türkçe karakterleri koruyarak ilk harf büyük, diğerleri küçük
+                        const cityName = city.toLowerCase().split('').map((char, index) => {
+                            return index === 0 ? char.toLocaleUpperCase('tr-TR') : char;
+                        }).join('');
+                        option.textContent = cityName;
+                        citySelect.appendChild(option);
+                    });
+                    
+                    // İstanbul'u varsayılan şehir olarak seç
+                    const defaultCity = 'İSTANBUL';
+                    citySelect.value = defaultCity;
+                    document.getElementById('selectedCity').textContent = `Seçili Şehir: İstanbul`;
+                    
+                    // Varsayılan şehir için namaz vakitlerini yükle
+                    updatePrayerTimesDisplay();
+                }
+            } catch (error) {
+                console.error('Şehir listesi yüklenirken hata:', error);
+            }
+        }
+
+        // Sayfa yüklendiğinde şehir listesini yükle
+        document.addEventListener('DOMContentLoaded', () => {
+            loadCities();
+        });
+
+        // Şehir seçimi değiştiğinde
+        document.getElementById('city-select').addEventListener('change', function() {
+            const selectedCity = this.options[this.selectedIndex].text;
+            document.getElementById('selectedCity').textContent = `Seçili Şehir: ${selectedCity}`;
+            updatePrayerTimesDisplay(); // Şehir değiştiğinde namaz vakitlerini güncelle
+        });
+    </script>
+
+    <script>
+        function updateNextPrayer() {
+            const prayerItems = document.querySelectorAll('.prayer-item');
+            if (!prayerItems.length) return;
+
+            const now = new Date();
+            let nextPrayer = null;
+            let nextPrayerTime = null;
+            let nextPrayerName = '';
+
+            // Get all prayer times for today
+            const todayPrayers = Array.from(prayerItems).map(item => {
+                const timeElement = item.querySelector('.prayer-time');
+                const nameElement = item.querySelector('.prayer-name');
+                if (!timeElement || !nameElement) return null;
+
+                const timeStr = timeElement.textContent.trim();
+                const [hours, minutes] = timeStr.split(':').map(Number);
+                
+                const prayerTime = new Date(now);
+                prayerTime.setHours(hours, minutes, 0, 0);
+
+                return {
+                    time: prayerTime,
+                    name: nameElement.textContent.trim(),
+                    element: item
+                };
+            }).filter(prayer => prayer !== null);
+
+            // Find the next prayer
+            for (const prayer of todayPrayers) {
+                if (prayer.time > now) {
+                    if (!nextPrayerTime || prayer.time < nextPrayerTime) {
+                        nextPrayerTime = prayer.time;
+                        nextPrayerName = prayer.name;
+                    }
+                }
+            }
+
+            // If no next prayer found today, get the first prayer of next day
+            if (!nextPrayerTime && todayPrayers.length > 0) {
+                const firstPrayer = todayPrayers[0];
+                nextPrayerTime = new Date(now);
+                nextPrayerTime.setDate(nextPrayerTime.getDate() + 1);
+                nextPrayerTime.setHours(
+                    firstPrayer.time.getHours(),
+                    firstPrayer.time.getMinutes(),
+                    0,
+                    0
+                );
+                nextPrayerName = firstPrayer.name;
+            }
+
+            // Update the display
+            const nextPrayerNameElement = document.getElementById('nextPrayerName');
+            const nextPrayerCountdownElement = document.getElementById('nextPrayerCountdown');
+            
+            if (nextPrayerNameElement && nextPrayerTime) {
+                nextPrayerNameElement.textContent = nextPrayerName;
+            }
+
+            // Clear any existing countdown interval
+            if (window.countdownInterval) {
+                clearInterval(window.countdownInterval);
+            }
+            
+            // Calculate and display countdown
+            function updateCountdown() {
+                if (!nextPrayerTime) return;
+                
+                const now = new Date();
+                const diff = nextPrayerTime - now;
+                
+                if (diff < 0) {
+                    updateNextPrayer(); // Refresh next prayer if countdown reaches zero
+                    return;
+                }
+                
+                const hours = Math.floor(diff / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+                
+                if (nextPrayerCountdownElement) {
+                    nextPrayerCountdownElement.textContent = 
+                        `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                }
+            }
+
+            updateCountdown();
+            // Update countdown every second
+            window.countdownInterval = setInterval(updateCountdown, 1000);
+        }
+
+        // Update next prayer info when prayer times are updated
+        document.addEventListener('prayerTimesUpdated', updateNextPrayer);
+        
+        // Initial update
+        setTimeout(updateNextPrayer, 1000); // Slight delay to ensure prayer times are loaded
+        
+        // Update next prayer info every minute to handle day changes
+        setInterval(updateNextPrayer, 60000);
+    </script>
+
+    <script>
+        // Menü için JavaScript
+        document.querySelector('.nav-toggle').addEventListener('click', function() {
+            document.querySelector('.nav-menu').classList.toggle('active');
+        });
+
+        // Menü itemlerine tıklama olayı
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                // Aktif class'ı güncelle
+                document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Hedef section'a scroll
+                const targetId = this.getAttribute('href').substring(1);
+                const targetElement = document.getElementById(targetId);
+                if (targetElement) {
+                    targetElement.scrollIntoView({ behavior: 'smooth' });
+                }
+                
+                // Mobil menüyü kapat
+                document.querySelector('.nav-menu').classList.remove('active');
+            });
+        });
+    </script>
+</body>
+
+</html>
