@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="tr">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PauseTime</title>
+</head>
+
+<body>
+  <!-- Ana uygulama konteyneri -->
+  <div id="app">
+
+    <!-- Logo ve başlık - sol üst -->
+    <div class="header-brand">
+      <svg class="brand-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+        stroke-linecap="round" stroke-linejoin="round">
+        <!-- Elle çizilmiş pause ikonu - daire içinde iki çizgi -->
+        <circle cx="12" cy="12" r="10" opacity="0.6" />
+        <line x1="10" y1="8" x2="10" y2="16" />
+        <line x1="14" y1="8" x2="14" y2="16" />
+      </svg>
+      <span class="brand-name">PauseTime</span>
+    </div>
+
+    <!-- Durum göstergesi - toggle butonu -->
+    <button id="status-toggle" class="status-toggle" title="Tıklayarak aç/kapat">
+      <div id="status-dot" class="status-dot"></div>
+      <span id="status-text" class="status-text">Aktif</span>
+    </button>
+
+    <!-- Bağlam etiketi -->
+    <span class="prayer-context">Sıradaki</span>
+
+    <!-- Vakit adı -->
+    <div id="prayer-name" class="prayer-name">Öğle</div>
+
+    <!-- Saat - ana odak -->
+    <time id="prayer-time" class="prayer-time">12:34</time>
+
+    <!-- Kalan süre -->
+    <div id="countdown" class="countdown">2 saat 14 dakika sonra</div>
+
+    <!-- İlerleme çizgisi -->
+    <div class="progress-section">
+      <div class="progress-line"></div>
+      <div id="progress-dot" class="progress-dot"></div>
+      <div class="progress-line"></div>
+    </div>
+
+    <!-- Tarih - altta -->
+    <div id="current-date" class="current-date">24 Ocak 2026</div>
+
+  </div>
+
+  <!-- Gizli audio elemanları -->
+  <audio id="local-audio" loop></audio>
+  <iframe id="youtube-player" class="youtube-hidden"></iframe>
+  <input type="file" id="audio-file" accept="audio/*" class="hidden-input" />
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>

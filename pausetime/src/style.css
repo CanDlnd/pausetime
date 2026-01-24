@@ -1,0 +1,282 @@
+/* ============================================
+   PauseTime Dashboard v2
+   Premium desktop utility UI
+   ============================================ */
+
+/* Renk Paleti */
+:root {
+  --bg-gradient-start: #0f1419;
+  --bg-gradient-end: #0a0d10;
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.5);
+  --text-muted: rgba(255, 255, 255, 0.35);
+  --dot-active: #22c55e;
+  --dot-pausing: #eab308;
+  --dot-disabled: #52525b;
+  --line-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Reset */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: linear-gradient(180deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+}
+
+/* Ana Konteyner */
+#app {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  position: relative;
+}
+
+/* ============================================
+   Header Brand (sol üst)
+   ============================================ */
+.header-brand {
+  position: absolute;
+  top: 16px;
+  left: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-logo {
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+}
+
+.brand-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+/* ============================================
+   Toggle Butonu (tıklanabilir durum)
+   ============================================ */
+.status-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 200ms ease;
+}
+
+.status-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  transform: scale(1.02);
+}
+
+.status-toggle:active {
+  transform: scale(0.98);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--dot-active);
+  transition: background-color 200ms ease, opacity 200ms ease, box-shadow 200ms ease;
+}
+
+.status-toggle:hover .status-dot {
+  box-shadow: 0 0 8px var(--dot-active);
+}
+
+.status-text {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+}
+
+/* ============================================
+   Vakit Bilgileri
+   ============================================ */
+
+/* Bağlam etiketi - çok küçük, soluk */
+.prayer-context {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  opacity: 0.6;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+/* Vakit adı - üstte, küçük */
+.prayer-name {
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  letter-spacing: 0.01em;
+}
+
+/* Saat - ana odak, büyük */
+.prayer-time {
+  font-size: 64px;
+  font-weight: 300;
+  letter-spacing: -2px;
+  line-height: 1;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 8px;
+}
+
+/* Kalan süre */
+.countdown {
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+}
+
+/* ============================================
+   İlerleme Çizgisi
+   ============================================ */
+.progress-section {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 200px;
+  margin-top: 32px;
+  gap: 0;
+}
+
+.progress-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, var(--line-color) 50%, transparent 100%);
+}
+
+.progress-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--dot-active);
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
+  transition: background-color 200ms ease, box-shadow 200ms ease;
+}
+
+/* ============================================
+   Tarih (altta)
+   ============================================ */
+.current-date {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+/* ============================================
+   Durum: Aktif
+   ============================================ */
+.state-active .status-dot,
+.state-active .progress-dot {
+  background-color: var(--dot-active);
+}
+
+.state-active .status-toggle:hover .status-dot {
+  box-shadow: 0 0 8px var(--dot-active);
+}
+
+.state-active .progress-dot {
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
+}
+
+/* ============================================
+   Durum: Duraklatılıyor (pulse animasyon)
+   ============================================ */
+.state-pausing .status-dot,
+.state-pausing .progress-dot {
+  background-color: var(--dot-pausing);
+  animation: pulse 2.5s ease-in-out infinite;
+}
+
+.state-pausing .status-toggle:hover .status-dot {
+  box-shadow: 0 0 8px var(--dot-pausing);
+}
+
+.state-pausing .progress-dot {
+  box-shadow: 0 0 12px rgba(234, 179, 8, 0.4);
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* ============================================
+   Durum: Devre dışı
+   ============================================ */
+.state-disabled .status-dot,
+.state-disabled .progress-dot {
+  background-color: var(--dot-disabled);
+  opacity: 0.4;
+  box-shadow: none;
+}
+
+.state-disabled .status-toggle:hover .status-dot {
+  box-shadow: 0 0 8px var(--dot-disabled);
+  opacity: 0.6;
+}
+
+.state-disabled .status-text {
+  color: var(--text-muted);
+}
+
+/* Gizli elemanlar */
+.youtube-hidden,
+.hidden-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
