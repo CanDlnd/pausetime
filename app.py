@@ -16,7 +16,9 @@ CORS(app)
 # SETTINGS SYSTEM
 # ============================================================
 
-SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'settings.json')
+APP_DATA_DIR = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'PauseTime')
+os.makedirs(APP_DATA_DIR, exist_ok=True)
+SETTINGS_FILE = os.path.join(APP_DATA_DIR, 'settings.json')
 
 CALCULATION_METHODS = {
     "DIYANET": 13,
@@ -56,6 +58,7 @@ def _save_settings(settings):
     try:
         with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
             json.dump(settings, f, indent=2, ensure_ascii=False)
+        logger.info(f"Settings saved to {SETTINGS_FILE}")
     except Exception as e:
         logger.error(f"Failed to save settings: {e}")
 
@@ -68,11 +71,12 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('app.log'),
+        logging.FileHandler(os.path.join(APP_DATA_DIR, 'app.log')),
         logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
+logger.info(f"Settings file: {SETTINGS_FILE}")
 
 prayer_times_cache = TTLCache(maxsize=100, ttl=3600)
 
@@ -575,4 +579,10 @@ def update_settings():
 # ============================================================
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    import sys
+    if '--dev' in sys.argv:
+        app.run(debug=True)
+    else:
+        from waitress import serve
+        logger.info("PauseTime backend starting on 127.0.0.1:5000")
+        serve(app, host='127.0.0.1', port=5000, threads=4)

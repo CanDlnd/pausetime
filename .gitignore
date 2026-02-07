@@ -3,3 +3,12 @@ __pycache__/
 *.sqlite3
 .env
 app.log
+settings.json
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Tauri sidecar binary (rebuilt from source)
+pausetime/src-tauri/binaries/

@@ -85,6 +85,7 @@ use tauri::{
     tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState},
     WindowEvent,
 };
+use tauri_plugin_shell::ShellExt;
 
 // Toggle MenuItem'ı state olarak tutmak için
 struct ToggleMenuItemState(Mutex<Option<MenuItem<tauri::Wry>>>);
@@ -104,6 +105,23 @@ pub fn run() {
 
             // Toggle item state'ini başlat
             app.manage(ToggleMenuItemState(Mutex::new(None)));
+
+            // Backend sidecar başlat
+            match app.shell().sidecar("pausetime-backend") {
+                Ok(cmd) => {
+                    match cmd.spawn() {
+                        Ok((_rx, _child)) => {
+                            log::info!("Backend sidecar started successfully");
+                        }
+                        Err(e) => {
+                            log::error!("Failed to spawn backend sidecar: {}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::error!("Failed to create backend sidecar command: {}", e);
+                }
+            }
 
             // Tray menü oluştur
             let show_item = MenuItem::with_id(app, "show", "Aç", true, None::<&str>)?;
@@ -166,6 +184,7 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![set_system_mute, update_tray_toggle_text])
+        .plugin(tauri_plugin_shell::init())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
