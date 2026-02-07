@@ -1,67 +1,47 @@
-# Ezan Vakti Uygulaması
+# PauseTime
 
-Bu web uygulaması, Diyanet İşleri Başkanlığı'nın API'sini kullanarak Türkiye'deki şehirlerin ezan vakitlerini gösteren ve bu vakitlerde müzik kontrolü sağlayan bir sistemdir.
+Ezan vakitlerinde ve kullanıcı tanımlı zamanlama aralıklarında sistem sesini otomatik olarak kapatan masaüstü uygulaması.
 
-## Özellikler
+## Mimari
 
-- Diyanet İşleri Başkanlığı API'si üzerinden gerçek zamanlı ezan vakitleri
-- Türkiye'deki tüm şehirler için ezan vakti desteği
-- Ezan vakti geldiğinde müziği otomatik durdurma
-- 10 dakika sonra müziği otomatik başlatma
-- Responsive ve kullanıcı dostu arayüz
-- Anlık saat ve tarih gösterimi
-- Sitemap.xml desteği
-
-## Teknolojiler
-
-- Backend: Python Flask
-- Frontend: HTML, CSS, JavaScript
-- API: Diyanet İşleri Başkanlığı (aladhan.com)
-- Sitemap.xml desteği
+- **Backend:** Python Flask (localhost:5000) — vakit hesaplama, zamanlama yönetimi, state engine
+- **Frontend:** Tauri + Vite (vanilla JS) — admin panel UI
+- **Sistem Kontrolü:** Tauri native — OS seviyesinde ses mute/unmute
 
 ## Kurulum
 
-1. Projeyi klonlayın:
-```bash
-git clone [proje-url]
-cd ezan-vakti-uygulamasi
-```
+### Backend
 
-2. Gerekli Python paketlerini yükleyin:
 ```bash
 pip install -r requirements.txt
-```
-
-3. Uygulamayı başlatın:
-```bash
 python app.py
 ```
 
-4. Tarayıcınızda uygulamayı açın:
+### Frontend (Tauri)
+
+```bash
+cd pausetime
+npm install
+npm run tauri dev
 ```
-http://localhost:5000
-```
 
-## Kullanım
+## API Endpoints
 
-1. Ana sayfada varsayılan olarak İstanbul ezan vakitleri gösterilir
-2. Şehir seçimi yaparak istediğiniz şehrin ezan vakitlerini görüntüleyebilirsiniz
-3. "Çal" butonuna basarak müziği başlatabilirsiniz
-4. Ezan vakti geldiğinde müzik otomatik olarak duracak ve 10 dakika sonra devam edecektir
-5. "Durdur" butonu ile müziği manuel olarak kontrol edebilirsiniz
+| Method | Endpoint | Açıklama |
+|--------|----------|----------|
+| GET | `/state` | Ana state polling (5s) |
+| POST | `/state/toggle` | Sistemi aç/kapat |
+| GET | `/api/prayer-times` | Günlük vakit saatleri |
+| GET | `/api/schedules` | Zamanlama listesi |
+| POST | `/api/schedules` | Zamanlama ekle |
+| PUT | `/api/schedules/<id>` | Zamanlama güncelle |
+| DELETE | `/api/schedules/<id>` | Zamanlama sil |
 
-## Önemli Notlar
+## State Modeli
 
-- Müzik dosyasını `static/music/` klasörü altına yerleştirmeniz gerekmektedir
-- İnternet bağlantısı olmadığında veya API'ye erişilemediğinde varsayılan ezan vakitleri kullanılır
-- Uygulama, tarayıcı sekmesi açık olduğu sürece çalışır
-
-## Katkıda Bulunma
-
-1. Bu projeyi fork edin
-2. Yeni bir branch oluşturun (`git checkout -b feature/yeniOzellik`)
-3. Değişikliklerinizi commit edin (`git commit -am 'Yeni özellik eklendi'`)
-4. Branch'inizi push edin (`git push origin feature/yeniOzellik`)
-5. Pull Request oluşturun
-# pausetime
-# pausetime
+| State | Anlam |
+|-------|-------|
+| `ACTIVE` | Sistem çalışıyor, ses açık |
+| `PAUSING` | Ezan vakti — ses otomatik kapatıldı (3.5 dk) |
+| `MANUAL_PAUSE` | Zamanlama aktif — ses kapatıldı |
+| `DISABLED` | Sistem devre dışı |

@@ -1,0 +1,8 @@
+{
+  "city": "ISTANBUL",
+  "calculation_method": "DIYANET",
+  "launch_on_startup": true,
+  "start_minimized_to_tray": false,
+  "close_to_tray": true,
+  "district": null
+}

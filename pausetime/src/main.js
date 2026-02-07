@@ -86,6 +86,14 @@ const elements = {
   // Sidebar nav
   navItems: document.querySelectorAll('.nav-item'),
   pages: document.querySelectorAll('.page'),
+  // Settings
+  settingCity: document.getElementById('setting-city'),
+  settingMethod: document.getElementById('setting-method'),
+  settingLaunchStartup: document.getElementById('setting-launch-startup'),
+  settingStartMinimized: document.getElementById('setting-start-minimized'),
+  settingCloseTray: document.getElementById('setting-close-tray'),
+  aboutVersion: document.getElementById('about-version'),
+  settingsToast: document.getElementById('settings-toast'),
 }
 
 // Son geçerli state (hata durumunda korunur)
@@ -570,6 +578,85 @@ async function submitScheduleForm(e) {
 // Event Listener'lar
 // ============================================
 
+// ============================================
+// Ayarlar (Settings) Yönetimi
+// ============================================
+
+let settingsLoaded = false
+
+async function fetchSettings() {
+  try {
+    const res = await fetch(`${API_BASE}/settings`)
+    if (!res.ok) return
+    const data = await res.json()
+    if (!data.success) return
+    const s = data.settings
+    elements.settingCity.value = s.city || 'ISTANBUL'
+    elements.settingMethod.value = s.calculation_method || 'DIYANET'
+    elements.settingLaunchStartup.checked = !!s.launch_on_startup
+    elements.settingStartMinimized.checked = !!s.start_minimized_to_tray
+    elements.settingCloseTray.checked = s.close_to_tray !== false
+    settingsLoaded = true
+  } catch (e) {
+    console.error('Settings fetch error:', e)
+  }
+}
+
+let toastTimeout = null
+
+function showSaveToast() {
+  clearTimeout(toastTimeout)
+  elements.settingsToast.classList.add('visible')
+  toastTimeout = setTimeout(() => {
+    elements.settingsToast.classList.remove('visible')
+  }, 1500)
+}
+
+async function updateSetting(key, value) {
+  try {
+    const res = await fetch(`${API_BASE}/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [key]: value })
+    })
+    if (!res.ok) return
+    const data = await res.json()
+    if (data.success) {
+      showSaveToast()
+      if (['city', 'calculation_method'].includes(key)) {
+        // Konum/yöntem değişti, vakit bilgisini yenile
+        fetchPrayerTimes()
+        fetchState()
+      }
+    }
+  } catch (e) {
+    console.error('Settings update error:', e)
+  }
+}
+
+function initSettingsEvents() {
+  // Şehir dropdown
+  elements.settingCity.addEventListener('change', () => {
+    updateSetting('city', elements.settingCity.value)
+  })
+
+  // Hesaplama yöntemi dropdown
+  elements.settingMethod.addEventListener('change', () => {
+    updateSetting('calculation_method', elements.settingMethod.value)
+  })
+
+  // Toggle'lar
+  elements.settingLaunchStartup.addEventListener('change', () => {
+    updateSetting('launch_on_startup', elements.settingLaunchStartup.checked)
+  })
+  elements.settingStartMinimized.addEventListener('change', () => {
+    updateSetting('start_minimized_to_tray', elements.settingStartMinimized.checked)
+  })
+  elements.settingCloseTray.addEventListener('change', () => {
+    updateSetting('close_to_tray', elements.settingCloseTray.checked)
+  })
+}
+
 function initEvents() {
   // Sistem toggle
   elements.statusToggle.addEventListener('click', handleDotClick)
@@ -592,6 +679,8 @@ function initEvents() {
     btn.addEventListener('click', () => applyDayPreset(btn.dataset.preset))
   })
 
+  // Ayarlar event'leri
+  initSettingsEvents()
 }
 
 // Polling başlat (5 saniyede bir)
@@ -619,6 +708,7 @@ async function init() {
 
   initEvents()
   initAudio()
+  fetchSettings()
   startPolling()
 
   // Tray event dinleyicisi
