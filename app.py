@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"]
+    default_limits=["5000 per hour"]
 )
 
 prayer_times_cache = TTLCache(maxsize=100, ttl=3600)
@@ -208,6 +208,14 @@ def api_weekly_prayer_times():
     else:
         return jsonify({'success': False, 'error': 'Failed to fetch weekly prayer times'})
 
+@app.route('/api/prayer-times')
+def api_prayer_times():
+    """Günlük vakit saatlerini döndürür (Tauri dashboard timeline için)"""
+    city = request.args.get('city', session.get('city', 'ISTANBUL'))
+    district = request.args.get('district', session.get('district'))
+    times = get_prayer_times(city, district)
+    return jsonify({'times': times})
+
 @app.route('/api/cities')
 def get_cities():
     return jsonify({
@@ -238,7 +246,7 @@ VAKIT_ORDER = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
 
 # TEST: Manuel vakit override - None = API'den gelen değer kullanılır
 # Örnek: TEST_OVERRIDE_FAJR = "05:15" → İmsak vaktini 05:15 yapar
-TEST_OVERRIDE_FAJR = "05:46"  # Production: API'den gelen değer
+TEST_OVERRIDE_FAJR = None  # Production: API'den gelen değer
 
 # Global state yönetimi
 _system_enabled = True  # Kullanıcı toggle durumu
@@ -249,14 +257,131 @@ _last_known_state = {
     "state": "ACTIVE"
 }
 
+# ============================================
+# ZAMANLAMA SİSTEMİ (Çoklu Zamanlama Desteği)
+# ============================================
+# Her zamanlama bir dict:
+#   id: benzersiz kimlik (int)
+#   pause_time: "HH:MM" — müziği durdurma saati
+#   resume_time: "HH:MM" veya None — müziği başlatma saati
+#   days: [0,1,2,3,4,5,6] — 0=Pazartesi, 6=Pazar (boş = her gün)
+#   label: kullanıcı notu (opsiyonel)
+#   enabled: True/False
+_schedules = []       # zamanlama listesi
+_schedule_next_id = 1 # sonraki id
+
+# Eski tek-seferlik manuel pause (hızlı butonlar ve anlık durdurma için)
+_manual_pause_config = {
+    "pause_time": None,
+    "resume_time": None,
+    "active": False
+}
+
 # Pause window sabitleri
-PAUSE_DURATION_SECONDS = 10  # 4.5 dakika (production)
+PAUSE_DURATION_SECONDS = 210  # 3.5 dakika (production)
 
 def _apply_test_overrides(prayer_times):
     """Test için vakit override'larını uygula"""
     if TEST_OVERRIDE_FAJR:
         prayer_times["Fajr"] = TEST_OVERRIDE_FAJR
     return prayer_times
+
+def _reset_manual_pause_config():
+    """Anlık manuel pause config'ini sıfırla"""
+    global _manual_pause_config
+    _manual_pause_config = {
+        "pause_time": None,
+        "resume_time": None,
+        "active": False
+    }
+    logger.info("Manual pause config auto-reset (resume time passed)")
+
+def _check_schedule_active(schedule):
+    """
+    Tek bir zamanlamayı kontrol eder.
+    Döner: True eğer şu an bu zamanlama aktifse
+    """
+    if not schedule.get("enabled", True):
+        return False
+
+    tz = pytz.timezone('Europe/Istanbul')
+    now = datetime.now(tz)
+
+    # Gün kontrolü (0=Pazartesi, 6=Pazar)
+    days = schedule.get("days", [])
+    if days:  # boş = her gün
+        if now.weekday() not in days:
+            return False
+
+    current_minutes = now.hour * 60 + now.minute
+
+    pause_h, pause_m = map(int, schedule["pause_time"].split(':'))
+    pause_minutes = pause_h * 60 + pause_m
+
+    resume_minutes = None
+    if schedule.get("resume_time"):
+        resume_h, resume_m = map(int, schedule["resume_time"].split(':'))
+        resume_minutes = resume_h * 60 + resume_m
+
+    if resume_minutes is None:
+        # Süresiz: pause_time'dan sonra gün sonuna kadar aktif
+        return current_minutes >= pause_minutes
+
+    # Zaman penceresi kontrolü
+    if pause_minutes <= resume_minutes:
+        return pause_minutes <= current_minutes < resume_minutes
+    else:
+        # Gece yarısı geçişi
+        return current_minutes >= pause_minutes or current_minutes < resume_minutes
+
+def _check_manual_pause():
+    """
+    Manuel pause durumunu kontrol eder.
+    Önce zamanlama listesini, sonra anlık manuel pause'u kontrol eder.
+    Döner: True eğer MANUAL_PAUSE aktif olmalıysa
+    """
+    global _manual_pause_config
+
+    # 1) Zamanlama listesini kontrol et
+    for schedule in _schedules:
+        if _check_schedule_active(schedule):
+            return True
+
+    # 2) Anlık (tek seferlik) manuel pause kontrol et
+    if not _manual_pause_config["pause_time"]:
+        return False
+    
+    tz = pytz.timezone('Europe/Istanbul')
+    now = datetime.now(tz)
+    current_minutes = now.hour * 60 + now.minute
+    
+    pause_h, pause_m = map(int, _manual_pause_config["pause_time"].split(':'))
+    pause_minutes = pause_h * 60 + pause_m
+    
+    resume_minutes = None
+    if _manual_pause_config["resume_time"]:
+        resume_h, resume_m = map(int, _manual_pause_config["resume_time"].split(':'))
+        resume_minutes = resume_h * 60 + resume_m
+    
+    if resume_minutes is None:
+        if current_minutes >= pause_minutes:
+            _manual_pause_config["active"] = True
+            return True
+        if _manual_pause_config["active"]:
+            return True
+        return False
+    
+    if pause_minutes <= resume_minutes:
+        is_in_window = pause_minutes <= current_minutes < resume_minutes
+    else:
+        is_in_window = current_minutes >= pause_minutes or current_minutes < resume_minutes
+    
+    if not is_in_window and _manual_pause_config["active"]:
+        _reset_manual_pause_config()
+        return False
+    
+    _manual_pause_config["active"] = is_in_window
+    return is_in_window
 
 def _parse_time(time_str):
     """HH:MM formatını datetime.time objesine çevirir"""
@@ -333,6 +458,7 @@ def _get_current_state(prayer_times):
     return vakit_display, remaining_str, state
 
 @app.route('/state')
+@limiter.exempt
 def get_state():
     """
     UI için tek state endpoint'i.
@@ -370,15 +496,26 @@ def get_state():
    # TEST: Vakit override'larını uygula
         prayer_times = _apply_test_overrides(prayer_times)
 
-        # State hesapla
+        # State hesapla (ezan bazlı)
         vakit, remaining, state = _get_current_state(prayer_times)
         
+        # ÖNCELİK KONTROLÜ: MANUAL_PAUSE > PAUSING (ezan)
+        # Manuel pause aktifse, ezan state'ini override et
+        if _check_manual_pause():
+            state = "MANUAL_PAUSE"
+        
+        # Aktif zamanlama sayısı
+        active_schedules = sum(1 for s in _schedules if s.get("enabled") and _check_schedule_active(s))
+        total_schedules = len(_schedules)
+
         # Başarılı sonucu kaydet
         _last_known_state = {
             "time": current_time,
             "vakit": vakit,
             "remaining": remaining,
-            "state": state
+            "state": state,
+            "schedules_active": active_schedules,
+            "schedules_total": total_schedules
         }
         
         return jsonify(_last_known_state)
@@ -417,6 +554,252 @@ def toggle_state():
 def get_system_status():
     """Sistem toggle durumunu döndürür"""
     return jsonify({"enabled": _system_enabled})
+
+# ============================================
+# MANUEL PAUSE API'ları (anlık tek seferlik)
+# ============================================
+
+@app.route('/state/manual-pause', methods=['POST'])
+def set_manual_pause():
+    """
+    Anlık tek seferlik manuel pause ayarla.
+    Dashboard quick butonları ve modal için.
+    """
+    global _manual_pause_config
+    
+    try:
+        data = request.get_json() or {}
+        
+        if 'pause_time' not in data:
+            return jsonify({
+                "success": False,
+                "error": "pause_time is required"
+            }), 400
+        
+        pause_time = data['pause_time']
+        try:
+            h, m = map(int, pause_time.split(':'))
+            if not (0 <= h <= 23 and 0 <= m <= 59):
+                raise ValueError()
+        except:
+            return jsonify({
+                "success": False,
+                "error": "Invalid pause_time format. Use HH:MM"
+            }), 400
+        
+        resume_time = data.get('resume_time')
+        if resume_time:
+            try:
+                h, m = map(int, resume_time.split(':'))
+                if not (0 <= h <= 23 and 0 <= m <= 59):
+                    raise ValueError()
+            except:
+                return jsonify({
+                    "success": False,
+                    "error": "Invalid resume_time format. Use HH:MM"
+                }), 400
+        
+        _manual_pause_config = {
+            "pause_time": pause_time,
+            "resume_time": resume_time,
+            "active": False
+        }
+        
+        logger.info(f"Manual pause set: {pause_time} - {resume_time or 'indefinite'}")
+        
+        return jsonify({
+            "success": True,
+            "config": _manual_pause_config
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in set_manual_pause: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/state/manual-pause', methods=['GET'])
+def get_manual_pause():
+    """Manuel pause ayarlarını döndürür"""
+    return jsonify({
+        "config": _manual_pause_config,
+        "is_active": _check_manual_pause()
+    })
+
+@app.route('/state/manual-pause', methods=['DELETE'])
+def clear_manual_pause():
+    """Anlık manuel pause'u temizle"""
+    global _manual_pause_config
+    
+    _manual_pause_config = {
+        "pause_time": None,
+        "resume_time": None,
+        "active": False
+    }
+    
+    logger.info("Manual pause cleared")
+    
+    return jsonify({
+        "success": True,
+        "config": _manual_pause_config
+    })
+
+# ============================================
+# ZAMANLAMA (SCHEDULE) API'ları
+# ============================================
+
+DAY_NAMES_TR = {
+    0: "Pazartesi", 1: "Salı", 2: "Çarşamba",
+    3: "Perşembe", 4: "Cuma", 5: "Cumartesi", 6: "Pazar"
+}
+
+def _validate_time_format(time_str):
+    """HH:MM formatını doğrula"""
+    try:
+        h, m = map(int, time_str.split(':'))
+        if 0 <= h <= 23 and 0 <= m <= 59:
+            return True
+    except:
+        pass
+    return False
+
+@app.route('/api/schedules', methods=['GET'])
+def get_schedules():
+    """Tüm zamanlamaları listele"""
+    tz = pytz.timezone('Europe/Istanbul')
+    now = datetime.now(tz)
+    current_day = now.weekday()
+
+    result = []
+    for s in _schedules:
+        result.append({
+            **s,
+            "is_active_now": _check_schedule_active(s),
+            "day_names": [DAY_NAMES_TR[d] for d in s.get("days", [])]
+        })
+
+    return jsonify({
+        "success": True,
+        "schedules": result,
+        "current_day": current_day,
+        "current_day_name": DAY_NAMES_TR[current_day]
+    })
+
+@app.route('/api/schedules', methods=['POST'])
+def add_schedule():
+    """
+    Yeni zamanlama ekle.
+    Body:
+    {
+        "pause_time": "23:00",
+        "resume_time": "09:00",     // opsiyonel
+        "days": [0,1,2,3,4],        // opsiyonel, boş = her gün
+        "label": "Hafta içi"        // opsiyonel
+    }
+    """
+    global _schedule_next_id
+    
+    try:
+        data = request.get_json() or {}
+        
+        if 'pause_time' not in data:
+            return jsonify({"success": False, "error": "pause_time gerekli"}), 400
+        
+        if not _validate_time_format(data['pause_time']):
+            return jsonify({"success": False, "error": "Geçersiz pause_time formatı (HH:MM)"}), 400
+        
+        resume_time = data.get('resume_time')
+        if resume_time and not _validate_time_format(resume_time):
+            return jsonify({"success": False, "error": "Geçersiz resume_time formatı (HH:MM)"}), 400
+        
+        days = data.get('days', [])
+        if not isinstance(days, list):
+            return jsonify({"success": False, "error": "days bir liste olmalı"}), 400
+        for d in days:
+            if not isinstance(d, int) or d < 0 or d > 6:
+                return jsonify({"success": False, "error": "days 0-6 arası integer olmalı"}), 400
+        
+        schedule = {
+            "id": _schedule_next_id,
+            "pause_time": data['pause_time'],
+            "resume_time": resume_time,
+            "days": sorted(days),
+            "label": data.get('label', ''),
+            "enabled": True
+        }
+        
+        _schedules.append(schedule)
+        _schedule_next_id += 1
+        
+        logger.info(f"Schedule added: #{schedule['id']} {schedule['pause_time']}-{schedule.get('resume_time', 'süresiz')} days={schedule['days']}")
+        
+        return jsonify({
+            "success": True,
+            "schedule": schedule
+        })
+        
+    except Exception as e:
+        logger.error(f"Error adding schedule: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/schedules/<int:schedule_id>', methods=['PUT'])
+def update_schedule(schedule_id):
+    """Zamanlama güncelle (enabled toggle, zaman değişikliği vb.)"""
+    try:
+        data = request.get_json() or {}
+        
+        schedule = next((s for s in _schedules if s["id"] == schedule_id), None)
+        if not schedule:
+            return jsonify({"success": False, "error": "Zamanlama bulunamadı"}), 404
+        
+        if 'pause_time' in data:
+            if not _validate_time_format(data['pause_time']):
+                return jsonify({"success": False, "error": "Geçersiz pause_time"}), 400
+            schedule['pause_time'] = data['pause_time']
+        
+        if 'resume_time' in data:
+            if data['resume_time'] and not _validate_time_format(data['resume_time']):
+                return jsonify({"success": False, "error": "Geçersiz resume_time"}), 400
+            schedule['resume_time'] = data['resume_time']
+        
+        if 'days' in data:
+            days = data['days']
+            if not isinstance(days, list):
+                return jsonify({"success": False, "error": "days bir liste olmalı"}), 400
+            schedule['days'] = sorted(days)
+        
+        if 'label' in data:
+            schedule['label'] = data['label']
+        
+        if 'enabled' in data:
+            schedule['enabled'] = bool(data['enabled'])
+        
+        logger.info(f"Schedule updated: #{schedule_id}")
+        
+        return jsonify({
+            "success": True,
+            "schedule": schedule
+        })
+        
+    except Exception as e:
+        logger.error(f"Error updating schedule: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/schedules/<int:schedule_id>', methods=['DELETE'])
+def delete_schedule(schedule_id):
+    """Zamanlama sil"""
+    global _schedules
+    
+    before_count = len(_schedules)
+    _schedules = [s for s in _schedules if s["id"] != schedule_id]
+    
+    if len(_schedules) == before_count:
+        return jsonify({"success": False, "error": "Zamanlama bulunamadı"}), 404
+    
+    logger.info(f"Schedule deleted: #{schedule_id}")
+    
+    return jsonify({"success": True})
 
 # ============================================================
 
