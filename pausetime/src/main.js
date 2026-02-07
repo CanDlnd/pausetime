@@ -61,28 +61,9 @@ const elements = {
   stateBadgeText: document.getElementById('state-badge-text'),
   // Connection
   connectionBadge: document.getElementById('connection-badge'),
-  // Manual control card
-  menuManualPause: document.getElementById('menu-manual-pause'),
-  menuCancelManual: document.getElementById('menu-cancel-manual'),
+  // Dashboard zamanlama kartı
   manualStatusIndicator: document.getElementById('manual-status-indicator'),
   manualIndicatorText: document.getElementById('manual-indicator-text'),
-  // Quick pause buttons
-  quickPause30: document.getElementById('quick-pause-30'),
-  quickPause60: document.getElementById('quick-pause-60'),
-  quickPause120: document.getElementById('quick-pause-120'),
-  // Modal elements
-  manualPauseModal: document.getElementById('manual-pause-modal'),
-  manualPauseForm: document.getElementById('manual-pause-form'),
-  pauseTimeInput: document.getElementById('pause-time'),
-  resumeTimeInput: document.getElementById('resume-time'),
-  modalCancel: document.getElementById('modal-cancel'),
-  // Manual page elements
-  manualPauseFormPage: document.getElementById('manual-pause-form-page'),
-  pauseTimePageInput: document.getElementById('pause-time-page'),
-  resumeTimePageInput: document.getElementById('resume-time-page'),
-  cancelManualPage: document.getElementById('cancel-manual-page'),
-  instantPauseIndicator: document.getElementById('instant-pause-indicator'),
-  instantPauseText: document.getElementById('instant-pause-text'),
   // Schedule form elements
   scheduleAddForm: document.getElementById('schedule-add-form'),
   schedPauseTime: document.getElementById('sched-pause-time'),
@@ -105,10 +86,6 @@ const elements = {
   // Sidebar nav
   navItems: document.querySelectorAll('.nav-item'),
   pages: document.querySelectorAll('.page'),
-  // Overflow menu (compat - hidden)
-  overflowBtn: null,
-  overflowMenu: document.getElementById('overflow-menu'),
-  menuSettings: document.getElementById('menu-settings')
 }
 
 // Son geçerli state (hata durumunda korunur)
@@ -176,47 +153,37 @@ function updateConnectionBadge(connected) {
   if (connected) {
     elements.connectionBadge.className = 'connection-badge connected'
     elements.connectionBadge.querySelector('.conn-text').textContent = 'Bağlı'
+    elements.connectionBadge.title = 'Backend sunucusu çalışıyor (localhost:5000)'
   } else {
     elements.connectionBadge.className = 'connection-badge disconnected'
     elements.connectionBadge.querySelector('.conn-text').textContent = 'Bağlantı Yok'
+    elements.connectionBadge.title = 'Backend sunucusuna ulaşılamıyor'
   }
+}
+
+// State badge tooltip metinleri
+const StateTooltip = {
+  [AppState.ACTIVE]: 'Sistem arka planda çalışıyor, vakitler izleniyor',
+  [AppState.PAUSING]: 'Ezan vakti — ses otomatik olarak kapatıldı',
+  [AppState.MANUAL_PAUSE]: 'Kullanıcı tarafından manuel olarak durduruldu',
+  [AppState.DISABLED]: 'Sistem devre dışı — hiçbir işlem yapılmıyor'
 }
 
 // State badge güncelle
 function updateStateBadge(uiState) {
-  // Badge class
   elements.stateBadge.className = `state-badge state-${uiState}`
   elements.stateBadgeText.textContent = StateText[uiState]
+  elements.stateBadge.title = StateTooltip[uiState] || ''
 }
 
-// Manuel kontrol kartı durumunu güncelle
+// Dashboard zamanlama kartı badge güncelle
 function updateManualCard(isManualPause) {
   if (isManualPause) {
-    elements.menuManualPause.classList.add('hidden')
-    elements.menuCancelManual.classList.remove('hidden')
     elements.manualStatusIndicator.className = 'manual-indicator on'
     elements.manualIndicatorText.textContent = 'Aktif'
-    // Quick butonları gizle
-    document.querySelector('.quick-actions')?.classList.add('hidden')
   } else {
-    elements.menuManualPause.classList.remove('hidden')
-    elements.menuCancelManual.classList.add('hidden')
     elements.manualStatusIndicator.className = 'manual-indicator off'
     elements.manualIndicatorText.textContent = 'Kapalı'
-    document.querySelector('.quick-actions')?.classList.remove('hidden')
-  }
-}
-
-// Manuel sayfa durumunu güncelle
-function updateManualPage(isManualPause) {
-  if (isManualPause) {
-    elements.cancelManualPage?.classList.remove('hidden')
-    elements.instantPauseIndicator.className = 'manual-indicator on'
-    elements.instantPauseText.textContent = 'Aktif'
-  } else {
-    elements.cancelManualPage?.classList.add('hidden')
-    elements.instantPauseIndicator.className = 'manual-indicator off'
-    elements.instantPauseText.textContent = 'Kapalı'
   }
 }
 
@@ -226,10 +193,9 @@ function updateDashboardScheduleInfo(data) {
   const active = data.schedules_active || 0
 
   if (total > 0) {
-    elements.dashboardScheduleInfo?.classList.remove('hidden')
     elements.dashboardScheduleText.textContent = `${active}/${total} zamanlama aktif`
   } else {
-    elements.dashboardScheduleInfo?.classList.add('hidden')
+    elements.dashboardScheduleText.textContent = 'Zamanlama yok'
   }
 }
 
@@ -252,12 +218,9 @@ function applyState(data) {
   // State badge güncelle
   updateStateBadge(uiState)
 
-  // Manuel kontrol güncelle
+  // Zamanlama kartı güncelle
   const isManualPause = data.state === 'MANUAL_PAUSE'
   updateManualCard(isManualPause)
-  updateManualPage(isManualPause)
-
-  // Dashboard zamanlama bilgisi
   updateDashboardScheduleInfo(data)
 
   // Bağlantı OK
@@ -322,23 +285,32 @@ function updateTimelineDots(times) {
   const now = new Date()
   const currentMinutes = now.getHours() * 60 + now.getMinutes()
 
-  const tlDots = document.querySelectorAll('.timeline-item .tl-dot')
+  const tlItems = document.querySelectorAll('.timeline-item')
   const prayerKeys = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
 
   let nextFound = false
   prayerKeys.forEach((key, i) => {
     const timeStr = times[key]
-    if (!timeStr || !tlDots[i]) return
+    if (!timeStr || !tlItems[i]) return
 
     const [h, m] = timeStr.split(':').map(Number)
     const prayerMinutes = h * 60 + m
+    const dot = tlItems[i].querySelector('.tl-dot')
+    const status = tlItems[i].querySelector('.tl-status')
 
-    tlDots[i].classList.remove('tl-done', 'tl-current')
+    // Temizle
+    dot.classList.remove('tl-done', 'tl-current')
+    tlItems[i].classList.remove('tl-passed', 'tl-next')
+    if (status) status.textContent = ''
 
     if (currentMinutes >= prayerMinutes) {
-      tlDots[i].classList.add('tl-done')
+      dot.classList.add('tl-done')
+      tlItems[i].classList.add('tl-passed')
+      if (status) status.textContent = 'Geçti'
     } else if (!nextFound) {
-      tlDots[i].classList.add('tl-current')
+      dot.classList.add('tl-current')
+      tlItems[i].classList.add('tl-next')
+      if (status) status.textContent = 'Sırada'
       nextFound = true
     }
   })
@@ -390,29 +362,6 @@ function switchPage(pageId) {
 
   // Başlık güncelle
   elements.pageTitle.textContent = PAGE_TITLES[pageId] || 'Panel'
-}
-
-// ============================================
-// Modal Logic
-// ============================================
-
-function openManualPauseModal() {
-  const now = new Date()
-  now.setMinutes(now.getMinutes() + 5)
-  const defaultTime = now.toTimeString().slice(0, 5)
-  elements.pauseTimeInput.value = defaultTime
-  elements.resumeTimeInput.value = ''
-  elements.manualPauseModal.classList.remove('hidden')
-}
-
-function closeManualPauseModal() {
-  elements.manualPauseModal.classList.add('hidden')
-}
-
-function handleModalClick(e) {
-  if (e.target === elements.manualPauseModal) {
-    closeManualPauseModal()
-  }
 }
 
 // ============================================
@@ -618,82 +567,6 @@ async function submitScheduleForm(e) {
 }
 
 // ============================================
-// Manuel Pause API
-// ============================================
-
-// Manuel pause POST (genel)
-async function postManualPause(pauseTime, resumeTime) {
-  const body = { pause_time: pauseTime }
-  if (resumeTime) {
-    body.resume_time = resumeTime
-  }
-
-  try {
-    const response = await fetch(`${API_BASE}/state/manual-pause`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    })
-
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    await fetchState()
-    return true
-  } catch (error) {
-    console.error('Manual pause error:', error)
-    return false
-  }
-}
-
-// Modal form submit
-async function submitManualPause(e) {
-  e.preventDefault()
-
-  const pauseTime = elements.pauseTimeInput.value
-  if (!pauseTime) return
-
-  const resumeTime = elements.resumeTimeInput.value || null
-
-  const ok = await postManualPause(pauseTime, resumeTime)
-  if (ok) closeManualPauseModal()
-}
-
-// Manuel sayfa form submit
-async function submitManualPausePage(e) {
-  e.preventDefault()
-
-  const pauseTime = elements.pauseTimePageInput.value
-  if (!pauseTime) return
-
-  const resumeTime = elements.resumeTimePageInput.value || null
-  await postManualPause(pauseTime, resumeTime)
-}
-
-// Quick pause (dakika bazlı)
-async function quickPause(minutes) {
-  const now = new Date()
-  const pauseTime = now.toTimeString().slice(0, 5)
-
-  now.setMinutes(now.getMinutes() + minutes)
-  const resumeTime = now.toTimeString().slice(0, 5)
-
-  await postManualPause(pauseTime, resumeTime)
-}
-
-// Manuel pause'u kaldır
-async function cancelManualPause() {
-  try {
-    const response = await fetch(`${API_BASE}/state/manual-pause`, {
-      method: 'DELETE'
-    })
-
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    await fetchState()
-  } catch (error) {
-    console.error('Cancel manual pause error:', error)
-  }
-}
-
-// ============================================
 // Event Listener'lar
 // ============================================
 
@@ -705,28 +578,6 @@ function initEvents() {
   elements.navItems.forEach(btn => {
     btn.addEventListener('click', () => switchPage(btn.dataset.page))
   })
-
-  // Quick pause butonları
-  elements.quickPause30?.addEventListener('click', () => quickPause(30))
-  elements.quickPause60?.addEventListener('click', () => quickPause(60))
-  elements.quickPause120?.addEventListener('click', () => quickPause(120))
-
-  // Manuel pause (dashboard kart — özel buton)
-  elements.menuManualPause.addEventListener('click', openManualPauseModal)
-
-  // Manuel pause kaldır (dashboard kart)
-  elements.menuCancelManual.addEventListener('click', cancelManualPause)
-
-  // Manuel sayfa kaldır butonu
-  elements.cancelManualPage?.addEventListener('click', cancelManualPause)
-
-  // Modal events
-  elements.modalCancel.addEventListener('click', closeManualPauseModal)
-  elements.manualPauseModal.addEventListener('click', handleModalClick)
-  elements.manualPauseForm.addEventListener('submit', submitManualPause)
-
-  // Manuel sayfa form (anlık durdurma)
-  elements.manualPauseFormPage?.addEventListener('submit', submitManualPausePage)
 
   // Zamanlama formu
   elements.scheduleAddForm?.addEventListener('submit', submitScheduleForm)
@@ -741,12 +592,6 @@ function initEvents() {
     btn.addEventListener('click', () => applyDayPreset(btn.dataset.preset))
   })
 
-  // ESC tuşu ile kapat
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      closeManualPauseModal()
-    }
-  })
 }
 
 // Polling başlat (5 saniyede bir)
