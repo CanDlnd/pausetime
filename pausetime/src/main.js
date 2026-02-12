@@ -7,6 +7,7 @@ import './style.css'
 import { initAudio, onAudioStateChange } from './audio.js'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { enable as enableAutostart, disable as disableAutostart, isEnabled as isAutostartEnabled } from '@tauri-apps/plugin-autostart'
 
 // Backend API base URL
 const API_BASE = 'http://localhost:5000'
@@ -584,6 +585,22 @@ async function submitScheduleForm(e) {
 
 let settingsLoaded = false
 
+// OS-level autostart durumunu settings ile senkronize et
+async function syncAutostart(shouldEnable) {
+  try {
+    const currentlyEnabled = await isAutostartEnabled()
+    if (shouldEnable && !currentlyEnabled) {
+      await enableAutostart()
+      console.log('Autostart synced: enabled')
+    } else if (!shouldEnable && currentlyEnabled) {
+      await disableAutostart()
+      console.log('Autostart synced: disabled')
+    }
+  } catch (error) {
+    console.error('Autostart sync error:', error)
+  }
+}
+
 async function fetchSettings() {
   try {
     const res = await fetch(`${API_BASE}/settings`)
@@ -597,6 +614,9 @@ async function fetchSettings() {
     elements.settingStartMinimized.checked = !!s.start_minimized_to_tray
     elements.settingCloseTray.checked = s.close_to_tray !== false
     settingsLoaded = true
+
+    // Uygulama başlangıcında autostart durumunu senkronize et
+    await syncAutostart(!!s.launch_on_startup)
   } catch (e) {
     console.error('Settings fetch error:', e)
   }
@@ -646,8 +666,20 @@ function initSettingsEvents() {
   })
 
   // Toggle'lar
-  elements.settingLaunchStartup.addEventListener('change', () => {
-    updateSetting('launch_on_startup', elements.settingLaunchStartup.checked)
+  elements.settingLaunchStartup.addEventListener('change', async () => {
+    const enabled = elements.settingLaunchStartup.checked
+    updateSetting('launch_on_startup', enabled)
+    // OS-level autostart'ı güncelle
+    try {
+      if (enabled) {
+        await enableAutostart()
+      } else {
+        await disableAutostart()
+      }
+      console.log(`Autostart ${enabled ? 'enabled' : 'disabled'}`)
+    } catch (error) {
+      console.error('Autostart update error:', error)
+    }
   })
   elements.settingStartMinimized.addEventListener('change', () => {
     updateSetting('start_minimized_to_tray', elements.settingStartMinimized.checked)

@@ -86,6 +86,7 @@ use tauri::{
     WindowEvent,
 };
 use tauri_plugin_shell::ShellExt;
+use tauri_plugin_autostart::MacosLauncher;
 
 // Toggle MenuItem'ı state olarak tutmak için
 struct ToggleMenuItemState(Mutex<Option<MenuItem<tauri::Wry>>>);
@@ -185,6 +186,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![set_system_mute, update_tray_toggle_text])
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec![])))
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
