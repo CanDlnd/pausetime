@@ -599,12 +599,6 @@ select {
   flex: 1;
   position: relative;
   padding: 12px 4px;
-  border-radius: var(--radius-sm);
-  transition: background 200ms var(--ease);
-}
-
-.timeline-item:hover {
-  background: rgba(255, 255, 255, 0.02);
 }
 
 /* Connecting line between dots */
