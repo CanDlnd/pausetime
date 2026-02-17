@@ -88,6 +88,23 @@ use tauri::{
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_autostart::MacosLauncher;
 
+/// Uygulama ayarlarından start_minimized_to_tray değerini oku
+fn should_start_minimized() -> bool {
+    let appdata = std::env::var("APPDATA")
+        .or_else(|_| std::env::var("HOME"))
+        .unwrap_or_default();
+    let settings_path = std::path::Path::new(&appdata).join("PauseTime").join("settings.json");
+
+    if let Ok(content) = std::fs::read_to_string(&settings_path) {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+            return json.get("start_minimized_to_tray")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+        }
+    }
+    false
+}
+
 // Toggle MenuItem'ı state olarak tutmak için
 struct ToggleMenuItemState(Mutex<Option<MenuItem<tauri::Wry>>>);
 
@@ -137,9 +154,11 @@ pub fn run() {
             
             let menu = Menu::with_items(app, &[&show_item, &toggle_item, &quit_item])?;
 
-            // Tray icon oluştur
+            // Tray icon oluştur (256x256 ikon kullan, Windows tray için ideal boyut)
+            let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../icons/icon.png"))
+                .expect("Failed to load tray icon");
             let _tray = TrayIconBuilder::with_id("main-tray")
-                .icon(app.default_window_icon().unwrap().clone())
+                .icon(tray_icon)
                 .menu(&menu)
                 .tooltip("PauseTime")
                 .on_menu_event(|app, event| {
@@ -174,6 +193,17 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+
+            // Simge durumunda küçültülmüş başlat ayarını kontrol et
+            if !should_start_minimized() {
+                // Ayar kapalıysa pencereyi göster
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            } else {
+                log::info!("Starting minimized to system tray");
+            }
 
             Ok(())
         })

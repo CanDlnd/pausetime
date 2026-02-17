@@ -4,7 +4,7 @@ import requests
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 from cachetools import TTLCache
 
@@ -19,20 +19,44 @@ CORS(app)
 APP_DATA_DIR = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'PauseTime')
 os.makedirs(APP_DATA_DIR, exist_ok=True)
 SETTINGS_FILE = os.path.join(APP_DATA_DIR, 'settings.json')
-
-CALCULATION_METHODS = {
-    "DIYANET": 13,
-    "ISNA": 2,
-    "MWL": 3,
-    "UMM_AL_QURA": 4
-}
+SCHEDULES_FILE = os.path.join(APP_DATA_DIR, 'schedules.json')
 
 DEFAULT_SETTINGS = {
     "city": "ISTANBUL",
-    "calculation_method": "DIYANET",
     "launch_on_startup": False,
     "start_minimized_to_tray": False,
     "close_to_tray": True
+}
+
+# Diyanet İşleri Başkanlığı - Şehir → İlçe ID eşleştirmesi (il merkezleri)
+DIYANET_DISTRICT_IDS = {
+    "ADANA": "9146", "ADIYAMAN": "9158", "AFYONKARAHISAR": "9167",
+    "AGRI": "9185", "AKSARAY": "9193", "AMASYA": "9198",
+    "ANKARA": "9206", "ANTALYA": "9225", "ARDAHAN": "9238",
+    "ARTVIN": "9246", "AYDIN": "9252", "BALIKESIR": "9270",
+    "BARTIN": "9285", "BATMAN": "9288", "BAYBURT": "9295",
+    "BILECIK": "9297", "BINGOL": "9303", "BITLIS": "9311",
+    "BOLU": "9315", "BURDUR": "9327", "BURSA": "9335",
+    "CANAKKALE": "9352", "CANKIRI": "9359", "CORUM": "9370",
+    "DENIZLI": "9392", "DIYARBAKIR": "9402", "DUZCE": "9414",
+    "EDIRNE": "9419", "ELAZIG": "9432", "ERZINCAN": "9440",
+    "ERZURUM": "9451", "ESKISEHIR": "9470", "GAZIANTEP": "9479",
+    "GIRESUN": "9494", "GUMUSHANE": "9501", "HAKKARI": "9507",
+    "HATAY": "20089", "IGDIR": "9522", "ISPARTA": "9528",
+    "ISTANBUL": "9541", "IZMIR": "9560", "KAHRAMANMARAS": "9577",
+    "KARABUK": "9581", "KARAMAN": "9587", "KARS": "9594",
+    "KASTAMONU": "9609", "KAYSERI": "9620", "KILIS": "9629",
+    "KIRIKKALE": "9635", "KIRKLARELI": "9638", "KIRSEHIR": "9646",
+    "KOCAELI": "9654", "KONYA": "9676", "KUTAHYA": "9689",
+    "MALATYA": "9703", "MANISA": "9716", "MARDIN": "9726",
+    "MERSIN": "9737", "MUGLA": "9747", "MUS": "9755",
+    "NEVSEHIR": "9760", "NIGDE": "9766", "ORDU": "9782",
+    "OSMANIYE": "9788", "RIZE": "9799", "SAKARYA": "9807",
+    "SAMSUN": "9819", "SANLIURFA": "9831", "SIIRT": "9839",
+    "SINOP": "9847", "SIRNAK": "9854", "SIVAS": "9868",
+    "TEKIRDAG": "9879", "TOKAT": "9887", "TRABZON": "9905",
+    "TUNCELI": "9914", "USAK": "9919", "VAN": "9930",
+    "YALOVA": "9935", "YOZGAT": "9949", "ZONGULDAK": "9955",
 }
 
 
@@ -44,9 +68,6 @@ def _load_settings():
                 saved = json.load(f)
             # Merge: eksik alanları default ile doldur
             merged = {**DEFAULT_SETTINGS, **saved}
-            # Enum validasyonu
-            if merged["calculation_method"] not in CALCULATION_METHODS:
-                merged["calculation_method"] = DEFAULT_SETTINGS["calculation_method"]
             return merged
     except Exception:
         pass
@@ -85,48 +106,50 @@ prayer_times_cache = TTLCache(maxsize=100, ttl=3600)
 # PRAYER TIMES
 # ============================================================
 
-def get_prayer_times(city=None, method=None):
-    """Vakit bilgilerini al. Parametreler verilmezse settings'ten okunur."""
+DIYANET_API_BASE = "https://ezanvakti.imsakiyem.com/api"
+
+
+def get_prayer_times(city=None, date=None):
+    """Diyanet İşleri Başkanlığı verilerinden vakit bilgilerini al."""
     if city is None:
         city = _settings.get("city", "ISTANBUL")
-    if method is None:
-        method_key = _settings.get("calculation_method", "DIYANET")
-        method = CALCULATION_METHODS.get(method_key, 13)
 
-    cache_key = f"{city.upper()}_{method}_{datetime.now(pytz.timezone('Europe/Istanbul')).strftime('%Y-%m-%d')}"
+    district_id = DIYANET_DISTRICT_IDS.get(city.upper(), "9541")
+
+    tz = pytz.timezone('Europe/Istanbul')
+    if date is None:
+        date = datetime.now(tz)
+
+    date_str = date.strftime('%Y-%m-%d')
+    cache_key = f"diyanet_{district_id}_{date_str}"
     if cache_key in prayer_times_cache:
-        logger.info(f"Cache hit for {city}")
         return prayer_times_cache[cache_key]
 
-    url = "https://api.aladhan.com/v1/timingsByCity"
-    params = {
-        "city": city.capitalize(),
-        "country": "Turkey",
-        "method": method
-    }
+    url = f"{DIYANET_API_BASE}/prayer-times/{district_id}/daily"
+    params = {"startDate": date_str}
 
     try:
-        response = requests.get(url, params=params, timeout=10)
+        response = requests.get(url, params=params, headers={"Accept": "application/json"}, timeout=15)
         response.raise_for_status()
         data = response.json()
 
-        if data['code'] == 200:
-            timings = data['data']['timings']
+        if data.get("success") and data.get("data"):
+            times = data["data"][0]["times"]
             result = {
-                "Fajr": timings['Fajr'],
-                "Dhuhr": timings['Dhuhr'],
-                "Asr": timings['Asr'],
-                "Maghrib": timings['Maghrib'],
-                "Isha": timings['Isha']
+                "Fajr": times["imsak"],
+                "Dhuhr": times["ogle"],
+                "Asr": times["ikindi"],
+                "Maghrib": times["aksam"],
+                "Isha": times["yatsi"]
             }
             prayer_times_cache[cache_key] = result
-            logger.info(f"Fetched prayer times for {city}")
+            logger.info(f"Diyanet prayer times for {city} ({date_str}): {result}")
             return result
         else:
-            logger.error(f"API error for {city}: {data.get('status')}")
+            logger.error(f"Diyanet API error for {city}: {data}")
             return _get_default_times()
     except requests.RequestException as e:
-        logger.error(f"Request error for {city}: {str(e)}")
+        logger.error(f"Diyanet request error for {city}: {str(e)}")
         return _get_default_times()
     except Exception as e:
         logger.error(f"Unexpected error for {city}: {str(e)}")
@@ -159,8 +182,8 @@ VAKIT_ORDER = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
 
 # Ezan vaktinden 60 saniye ÖNCE duraklatmaya başla
 PRE_PAUSE_OFFSET_SECONDS = 60
-# Duraklatma süresi: 4.5 dakika (270 saniye)
-PAUSE_DURATION_SECONDS = 270
+# Duraklatma süresi: 9 dakika (540 saniye)
+PAUSE_DURATION_SECONDS = 9 * 60
 
 # Global state
 _system_enabled = True
@@ -183,8 +206,72 @@ _last_known_state = {
 #   label: str — kullanıcı notu
 #   enabled: bool
 
-_schedules = []
-_schedule_next_id = 1
+SCHEDULES_BACKUP_FILE = SCHEDULES_FILE + '.bak'
+
+
+def _load_schedules():
+    """Disk'ten zamanlamaları yükle. Ana dosya bozuksa yedekten oku."""
+    for filepath in [SCHEDULES_FILE, SCHEDULES_BACKUP_FILE]:
+        try:
+            if os.path.exists(filepath):
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                if not content:
+                    continue
+                data = json.loads(content)
+                schedules = data.get("schedules", [])
+                next_id = data.get("next_id", 1)
+                if schedules:
+                    max_id = max(s.get("id", 0) for s in schedules)
+                    next_id = max(next_id, max_id + 1)
+                if filepath == SCHEDULES_BACKUP_FILE:
+                    logger.warning(f"Loaded schedules from backup file (main file was corrupted)")
+                else:
+                    logger.info(f"Loaded {len(schedules)} schedules from {filepath}")
+                return schedules, next_id
+        except Exception as e:
+            logger.error(f"Failed to load schedules from {filepath}: {e}")
+    return [], 1
+
+
+def _save_schedules():
+    """Zamanlamaları atomik olarak diske yaz (temp -> rename)."""
+    import tempfile
+    try:
+        data = {
+            "schedules": _schedules,
+            "next_id": _schedule_next_id
+        }
+        json_str = json.dumps(data, indent=2, ensure_ascii=False)
+
+        # Mevcut dosyayı yedekle
+        if os.path.exists(SCHEDULES_FILE):
+            try:
+                import shutil
+                shutil.copy2(SCHEDULES_FILE, SCHEDULES_BACKUP_FILE)
+            except Exception:
+                pass
+
+        # Atomik yazma: önce temp dosyaya yaz, sonra rename et
+        fd, tmp_path = tempfile.mkstemp(dir=APP_DATA_DIR, suffix='.tmp')
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                f.write(json_str)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, SCHEDULES_FILE)
+        except Exception:
+            # Temp dosya kaldıysa temizle
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            raise
+
+        logger.info(f"Schedules saved to {SCHEDULES_FILE}")
+    except Exception as e:
+        logger.error(f"Failed to save schedules: {e}")
+
+
+_schedules, _schedule_next_id = _load_schedules()
 
 DAY_NAMES_TR = {
     0: "Pazartesi", 1: "Salı", 2: "Çarşamba",
@@ -309,7 +396,15 @@ def _get_current_state(prayer_times):
     # Bugün kalan vakit yoksa → yarının İmsak vakti
     if next_vakit is None:
         next_vakit = "Fajr"
-        fajr_minutes = times_in_seconds[0][1] // 60
+        # Yarının gerçek İmsak vaktini al
+        try:
+            tomorrow = now + timedelta(days=1)
+            tomorrow_times = get_prayer_times(date=tomorrow)
+            fajr_str = tomorrow_times.get("Fajr", "06:00")
+            fh, fm = map(int, fajr_str.split(':'))
+            fajr_minutes = fh * 60 + fm
+        except Exception:
+            fajr_minutes = times_in_seconds[0][1] // 60
         remaining_minutes = (24 * 60 - current_minutes) + fajr_minutes
 
     vakit_display = VAKIT_NAMES.get(next_vakit, next_vakit)
@@ -393,9 +488,29 @@ def toggle_state():
 
 @app.route('/api/prayer-times')
 def api_prayer_times():
-    """Günlük vakit saatlerini döndürür (dashboard timeline için)."""
+    """Günlük vakit saatlerini döndürür (dashboard timeline için).
+    Tüm vakitler geçmişse yarının vakitlerini döner."""
+    tz = pytz.timezone('Europe/Istanbul')
+    now = datetime.now(tz)
+    current_minutes = now.hour * 60 + now.minute
+
     times = get_prayer_times()
-    return jsonify({'times': times})
+
+    # Tüm vakitler geçmiş mi kontrol et
+    all_passed = True
+    for key in VAKIT_ORDER:
+        t = times.get(key, "00:00")
+        h, m = map(int, t.split(':'))
+        if h * 60 + m > current_minutes:
+            all_passed = False
+            break
+
+    if all_passed:
+        tomorrow = now + timedelta(days=1)
+        times = get_prayer_times(date=tomorrow)
+        return jsonify({'times': times, 'is_tomorrow': True})
+
+    return jsonify({'times': times, 'is_tomorrow': False})
 
 
 @app.route('/api/schedules', methods=['GET'])
@@ -457,6 +572,7 @@ def add_schedule():
 
         _schedules.append(schedule)
         _schedule_next_id += 1
+        _save_schedules()
 
         logger.info(f"Schedule added: #{schedule['id']} {schedule['pause_time']}-{schedule.get('resume_time', 'süresiz')} days={schedule['days']}")
 
@@ -499,6 +615,7 @@ def update_schedule(schedule_id):
         if 'enabled' in data:
             schedule['enabled'] = bool(data['enabled'])
 
+        _save_schedules()
         logger.info(f"Schedule updated: #{schedule_id}")
 
         return jsonify({"success": True, "schedule": schedule})
@@ -519,6 +636,7 @@ def delete_schedule(schedule_id):
     if len(_schedules) == before_count:
         return jsonify({"success": False, "error": "Zamanlama bulunamadı"}), 404
 
+    _save_schedules()
     logger.info(f"Schedule deleted: #{schedule_id}")
 
     return jsonify({"success": True})
@@ -547,11 +665,6 @@ def update_settings():
                 return jsonify({"success": False, "error": "city boş olamaz"}), 400
             _settings['city'] = data['city'].strip().upper()
 
-        if 'calculation_method' in data:
-            if data['calculation_method'] not in CALCULATION_METHODS:
-                return jsonify({"success": False, "error": f"Geçersiz hesaplama yöntemi. Seçenekler: {list(CALCULATION_METHODS.keys())}"}), 400
-            _settings['calculation_method'] = data['calculation_method']
-
         if 'launch_on_startup' in data:
             _settings['launch_on_startup'] = bool(data['launch_on_startup'])
 
@@ -561,8 +674,8 @@ def update_settings():
         if 'close_to_tray' in data:
             _settings['close_to_tray'] = bool(data['close_to_tray'])
 
-        # Konum veya hesaplama yöntemi değiştiyse cache'i temizle
-        if any(k in data for k in ('city', 'calculation_method')):
+        # Konum değiştiyse cache'i temizle
+        if 'city' in data:
             prayer_times_cache.clear()
             logger.info(f"Prayer cache cleared (settings changed)")
 

@@ -126,7 +126,7 @@
                 </svg>
                 <span id="dashboard-schedule-text">Zamanlama yok</span>
               </div>
-              <p class="card-desc" style="margin-top: 12px;">Zamanlamaları yönetmek için <strong>Manuel Kontrol</strong>
+              <p class="card-desc" style="margin-top: 14px; font-size: 12px;">Zamanlamaları yönetmek için <strong style="color: var(--text-secondary);">Manuel Kontrol</strong>
                 sayfasına gidin.</p>
             </div>
           </div>
@@ -134,7 +134,7 @@
           <!-- Kart: Progress / Aktivite -->
           <div class="card card-activity">
             <div class="card-header">
-              <span class="card-title">Günlük Aktivite</span>
+              <span class="card-title">Günlük Ezan Vakitleri</span>
             </div>
             <div class="card-body">
               <div class="timeline">
@@ -192,7 +192,7 @@
           <!-- Zamanlama Ekle Kartı -->
           <div class="card card-full">
             <div class="card-header">
-              <span class="card-title">Yeni Zamanlama Ekle</span>
+              <span class="card-title" id="schedule-form-title">Yeni Zamanlama Ekle</span>
             </div>
             <div class="card-body">
               <form id="schedule-add-form" class="manual-form-large">
@@ -247,12 +247,19 @@
                 </div>
 
                 <div class="form-actions-large">
-                  <button type="submit" class="btn-action btn-pause">
+                  <button type="submit" id="schedule-submit-btn" class="btn-action btn-pause">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <line x1="12" y1="5" x2="12" y2="19" />
                       <line x1="5" y1="12" x2="19" y2="12" />
                     </svg>
-                    Zamanlama Ekle
+                    <span id="schedule-submit-text">Zamanlama Ekle</span>
+                  </button>
+                  <button type="button" id="schedule-cancel-btn" class="btn-action btn-cancel" style="display:none;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                    İptal
                   </button>
                 </div>
               </form>
@@ -260,7 +267,7 @@
           </div>
 
           <!-- Mevcut Zamanlamalar Kartı -->
-          <div class="card card-full" style="margin-top: 16px;">
+          <div class="card card-full" style="margin-top: 18px;">
             <div class="card-header">
               <span class="card-title">Kayıtlı Zamanlamalar</span>
               <span id="schedule-count" class="manual-indicator off">
@@ -379,14 +386,9 @@
                   </div>
                 </div>
                 <div class="form-group-large">
-                  <label for="setting-method">Hesaplama Yöntemi</label>
+                  <label>Veri Kaynağı</label>
                   <div class="input-wrapper">
-                    <select id="setting-method" class="text-input">
-                      <option value="DIYANET">Diyanet İşleri Başkanlığı</option>
-                      <option value="ISNA">ISNA (Kuzey Amerika)</option>
-                      <option value="MWL">Muslim World League</option>
-                      <option value="UMM_AL_QURA">Umm al-Qura (Mekke)</option>
-                    </select>
+                    <span class="text-input" style="opacity:0.6;cursor:default;font-size:13px;">T.C. Diyanet İşleri Başkanlığı</span>
                   </div>
                 </div>
               </div>
@@ -410,13 +412,6 @@
                 <span class="settings-toggle-label">Simge durumuna küçültülmüş başlat</span>
                 <label class="settings-toggle">
                   <input type="checkbox" id="setting-start-minimized" />
-                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                </label>
-              </div>
-              <div class="settings-toggle-row">
-                <span class="settings-toggle-label">Kapatınca sistem tepsisine küçült</span>
-                <label class="settings-toggle">
-                  <input type="checkbox" id="setting-close-tray" />
                   <span class="toggle-track"><span class="toggle-thumb"></span></span>
                 </label>
               </div>

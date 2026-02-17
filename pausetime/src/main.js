@@ -75,6 +75,11 @@ const elements = {
   scheduleCountText: document.getElementById('schedule-count-text'),
   dayBtns: document.querySelectorAll('.day-btn'),
   presetBtns: document.querySelectorAll('.preset-btn'),
+  // Schedule form edit mode
+  scheduleFormTitle: document.getElementById('schedule-form-title'),
+  scheduleSubmitBtn: document.getElementById('schedule-submit-btn'),
+  scheduleSubmitText: document.getElementById('schedule-submit-text'),
+  scheduleCancelBtn: document.getElementById('schedule-cancel-btn'),
   // Dashboard schedule summary
   dashboardScheduleInfo: document.getElementById('dashboard-schedule-info'),
   dashboardScheduleText: document.getElementById('dashboard-schedule-text'),
@@ -89,10 +94,8 @@ const elements = {
   pages: document.querySelectorAll('.page'),
   // Settings
   settingCity: document.getElementById('setting-city'),
-  settingMethod: document.getElementById('setting-method'),
   settingLaunchStartup: document.getElementById('setting-launch-startup'),
   settingStartMinimized: document.getElementById('setting-start-minimized'),
-  settingCloseTray: document.getElementById('setting-close-tray'),
   aboutVersion: document.getElementById('about-version'),
   settingsToast: document.getElementById('settings-toast'),
 }
@@ -275,12 +278,19 @@ async function fetchPrayerTimes() {
     const timesData = await timesResponse.json()
     if (timesData && timesData.times) {
       const times = timesData.times
+      const isTomorrow = timesData.is_tomorrow || false
       if (elements.tlFajr) elements.tlFajr.textContent = times.Fajr || '--:--'
       if (elements.tlDhuhr) elements.tlDhuhr.textContent = times.Dhuhr || '--:--'
       if (elements.tlAsr) elements.tlAsr.textContent = times.Asr || '--:--'
       if (elements.tlMaghrib) elements.tlMaghrib.textContent = times.Maghrib || '--:--'
       if (elements.tlIsha) elements.tlIsha.textContent = times.Isha || '--:--'
-      updateTimelineDots(times)
+      updateTimelineDots(times, isTomorrow)
+
+      // Aktivite kartı başlığını güncelle
+      const activityTitle = document.querySelector('.card-activity .card-title')
+      if (activityTitle) {
+        activityTitle.textContent = isTomorrow ? 'Yarınki Ezan Vakitleri' : 'Günlük Aktivite'
+      }
     }
   } catch (error) {
     console.log('Prayer times fetch skipped:', error.message)
@@ -288,7 +298,7 @@ async function fetchPrayerTimes() {
 }
 
 // Timeline noktalarını güncelle (geçen vakitler yeşil)
-function updateTimelineDots(times) {
+function updateTimelineDots(times, isTomorrow = false) {
   if (!times) return
 
   const now = new Date()
@@ -312,15 +322,25 @@ function updateTimelineDots(times) {
     tlItems[i].classList.remove('tl-passed', 'tl-next')
     if (status) status.textContent = ''
 
-    if (currentMinutes >= prayerMinutes) {
-      dot.classList.add('tl-done')
-      tlItems[i].classList.add('tl-passed')
-      if (status) status.textContent = 'Geçti'
-    } else if (!nextFound) {
-      dot.classList.add('tl-current')
-      tlItems[i].classList.add('tl-next')
-      if (status) status.textContent = 'Sırada'
-      nextFound = true
+    if (isTomorrow) {
+      // Yarının vakitleri: ilki sırada, geri kalanı beklemede
+      if (!nextFound) {
+        dot.classList.add('tl-current')
+        tlItems[i].classList.add('tl-next')
+        if (status) status.textContent = 'Sırada'
+        nextFound = true
+      }
+    } else {
+      if (currentMinutes >= prayerMinutes) {
+        dot.classList.add('tl-done')
+        tlItems[i].classList.add('tl-passed')
+        if (status) status.textContent = 'Geçti'
+      } else if (!nextFound) {
+        dot.classList.add('tl-current')
+        tlItems[i].classList.add('tl-next')
+        if (status) status.textContent = 'Sırada'
+        nextFound = true
+      }
     }
   })
 }
@@ -382,6 +402,10 @@ const DAY_SHORT = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz']
 // Seçili günleri takip et
 let selectedDays = new Set()
 
+// Düzenleme modu state
+let editingScheduleId = null
+let cachedSchedules = []
+
 function toggleDay(dayNum) {
   if (selectedDays.has(dayNum)) {
     selectedDays.delete(dayNum)
@@ -434,6 +458,9 @@ function renderScheduleList(schedules) {
   const container = elements.scheduleList
   if (!container) return
 
+  // Cache'i güncelle (düzenleme için)
+  cachedSchedules = schedules
+
   // Sayacı güncelle
   if (elements.scheduleCountText) {
     elements.scheduleCountText.textContent = `${schedules.length} zamanlama`
@@ -451,8 +478,10 @@ function renderScheduleList(schedules) {
   container.innerHTML = schedules.map(s => {
     const isActive = s.is_active_now
     const isEnabled = s.enabled
+    const isEditing = editingScheduleId === s.id
     const activeClass = isActive ? 'active-now' : ''
     const disabledClass = !isEnabled ? 'disabled' : ''
+    const editingClass = isEditing ? 'editing' : ''
     const timeRange = s.resume_time
       ? `${s.pause_time} → ${s.resume_time}`
       : `${s.pause_time} → Süresiz`
@@ -461,7 +490,7 @@ function renderScheduleList(schedules) {
       : '<span class="day-badge">Her gün</span>'
 
     return `
-      <div class="schedule-item ${activeClass} ${disabledClass}" data-id="${s.id}">
+      <div class="schedule-item ${activeClass} ${disabledClass} ${editingClass}" data-id="${s.id}">
         <div class="schedule-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <circle cx="12" cy="12" r="10" />
@@ -476,6 +505,12 @@ function renderScheduleList(schedules) {
           </div>
         </div>
         <div class="schedule-actions">
+          <button class="sched-edit-btn" data-id="${s.id}" title="Düzenle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+          </button>
           <button class="sched-toggle-btn ${isEnabled ? 'on' : ''}" data-id="${s.id}" data-enabled="${isEnabled}" title="${isEnabled ? 'Devre dışı bırak' : 'Etkinleştir'}"></button>
           <button class="sched-delete-btn" data-id="${s.id}" title="Sil">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -488,7 +523,11 @@ function renderScheduleList(schedules) {
     `
   }).join('')
 
-  // Event delegation for toggle/delete buttons
+  // Event delegation for edit/toggle/delete buttons
+  container.querySelectorAll('.sched-edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => startEditSchedule(parseInt(btn.dataset.id)))
+  })
+
   container.querySelectorAll('.sched-toggle-btn').forEach(btn => {
     btn.addEventListener('click', () => toggleSchedule(parseInt(btn.dataset.id), btn.dataset.enabled === 'true'))
   })
@@ -517,6 +556,88 @@ async function addSchedule(pauseTime, resumeTime, days, label) {
     return true
   } catch (error) {
     console.error('Add schedule error:', error)
+    return false
+  }
+}
+
+// Düzenleme moduna geç
+function startEditSchedule(id) {
+  const schedule = cachedSchedules.find(s => s.id === id)
+  if (!schedule) return
+
+  editingScheduleId = id
+
+  // Formu verilerle doldur
+  elements.schedPauseTime.value = schedule.pause_time || ''
+  elements.schedResumeTime.value = schedule.resume_time || ''
+  elements.schedLabel.value = schedule.label || ''
+
+  // Günleri seç
+  selectedDays = new Set(schedule.days || [])
+  updateDayButtons()
+
+  // Form görünümünü düzenleme moduna çevir
+  elements.scheduleFormTitle.textContent = 'Zamanlama Düzenle'
+  elements.scheduleSubmitText.textContent = 'Güncelle'
+  elements.scheduleSubmitBtn.classList.remove('btn-pause')
+  elements.scheduleSubmitBtn.classList.add('btn-edit')
+  elements.scheduleCancelBtn.style.display = ''
+
+  // Düzenlenen item'a vurgu ekle
+  document.querySelectorAll('.schedule-item').forEach(el => {
+    el.classList.toggle('editing', parseInt(el.dataset.id) === id)
+  })
+
+  // Forma scroll yap
+  elements.scheduleAddForm.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+// Düzenleme modunu iptal et
+function cancelEditSchedule() {
+  editingScheduleId = null
+
+  // Formu sıfırla
+  elements.schedPauseTime.value = ''
+  elements.schedResumeTime.value = ''
+  elements.schedLabel.value = ''
+  selectedDays = new Set()
+  updateDayButtons()
+
+  // Form görünümünü ekleme moduna çevir
+  elements.scheduleFormTitle.textContent = 'Yeni Zamanlama Ekle'
+  elements.scheduleSubmitText.textContent = 'Zamanlama Ekle'
+  elements.scheduleSubmitBtn.classList.remove('btn-edit')
+  elements.scheduleSubmitBtn.classList.add('btn-pause')
+  elements.scheduleCancelBtn.style.display = 'none'
+
+  // Düzenleme vurgusunu kaldır
+  document.querySelectorAll('.schedule-item.editing').forEach(el => {
+    el.classList.remove('editing')
+  })
+}
+
+// Zamanlamayı güncelle (düzenleme)
+async function updateSchedule(id, pauseTime, resumeTime, days, label) {
+  try {
+    const body = {
+      pause_time: pauseTime,
+      resume_time: resumeTime || null,
+      days: days.length > 0 ? days : [],
+      label: label || ''
+    }
+
+    const response = await fetch(`${API_BASE}/api/schedules/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    await fetchSchedules()
+    await fetchState()
+    return true
+  } catch (error) {
+    console.error('Update schedule error:', error)
     return false
   }
 }
@@ -553,7 +674,7 @@ async function deleteSchedule(id) {
   }
 }
 
-// Zamanlama formu submit
+// Zamanlama formu submit (hem ekleme hem düzenleme)
 async function submitScheduleForm(e) {
   e.preventDefault()
 
@@ -564,14 +685,18 @@ async function submitScheduleForm(e) {
   const days = [...selectedDays].sort()
   const label = elements.schedLabel.value.trim()
 
-  const ok = await addSchedule(pauseTime, resumeTime, days, label)
+  let ok = false
+
+  if (editingScheduleId !== null) {
+    // Düzenleme modu: güncelle
+    ok = await updateSchedule(editingScheduleId, pauseTime, resumeTime, days, label)
+  } else {
+    // Ekleme modu: yeni ekle
+    ok = await addSchedule(pauseTime, resumeTime, days, label)
+  }
+
   if (ok) {
-    // Formu sıfırla
-    elements.schedPauseTime.value = ''
-    elements.schedResumeTime.value = ''
-    elements.schedLabel.value = ''
-    selectedDays = new Set()
-    updateDayButtons()
+    cancelEditSchedule()
   }
 }
 
@@ -609,10 +734,8 @@ async function fetchSettings() {
     if (!data.success) return
     const s = data.settings
     elements.settingCity.value = s.city || 'ISTANBUL'
-    elements.settingMethod.value = s.calculation_method || 'DIYANET'
     elements.settingLaunchStartup.checked = !!s.launch_on_startup
     elements.settingStartMinimized.checked = !!s.start_minimized_to_tray
-    elements.settingCloseTray.checked = s.close_to_tray !== false
     settingsLoaded = true
 
     // Uygulama başlangıcında autostart durumunu senkronize et
@@ -643,8 +766,8 @@ async function updateSetting(key, value) {
     const data = await res.json()
     if (data.success) {
       showSaveToast()
-      if (['city', 'calculation_method'].includes(key)) {
-        // Konum/yöntem değişti, vakit bilgisini yenile
+      if (key === 'city') {
+        // Konum değişti, vakit bilgisini yenile
         fetchPrayerTimes()
         fetchState()
       }
@@ -658,11 +781,6 @@ function initSettingsEvents() {
   // Şehir dropdown
   elements.settingCity.addEventListener('change', () => {
     updateSetting('city', elements.settingCity.value)
-  })
-
-  // Hesaplama yöntemi dropdown
-  elements.settingMethod.addEventListener('change', () => {
-    updateSetting('calculation_method', elements.settingMethod.value)
   })
 
   // Toggle'lar
@@ -684,9 +802,6 @@ function initSettingsEvents() {
   elements.settingStartMinimized.addEventListener('change', () => {
     updateSetting('start_minimized_to_tray', elements.settingStartMinimized.checked)
   })
-  elements.settingCloseTray.addEventListener('change', () => {
-    updateSetting('close_to_tray', elements.settingCloseTray.checked)
-  })
 }
 
 function initEvents() {
@@ -700,6 +815,7 @@ function initEvents() {
 
   // Zamanlama formu
   elements.scheduleAddForm?.addEventListener('submit', submitScheduleForm)
+  elements.scheduleCancelBtn?.addEventListener('click', cancelEditSchedule)
 
   // Gün seçici butonları
   elements.dayBtns.forEach(btn => {
