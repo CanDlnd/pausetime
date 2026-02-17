@@ -297,33 +297,63 @@ async function fetchPrayerTimes() {
   }
 }
 
-// Timeline noktalarını güncelle (geçen vakitler yeşil)
+// Son bilinen vakit verileri (progress güncelleme döngüsü için)
+let lastPrayerTimes = null
+let lastIsTomorrow = false
+let timelineProgressInterval = null
+
+// Timeline noktalarını ve ilerleme çizgilerini güncelle
 function updateTimelineDots(times, isTomorrow = false) {
   if (!times) return
 
+  // Verileri sakla (her saniye güncelleme için)
+  lastPrayerTimes = times
+  lastIsTomorrow = isTomorrow
+
+  // İlk çizim
+  renderTimelineState()
+
+  // Her saniye güncellenen ilerleme döngüsünü başlat
+  if (!timelineProgressInterval) {
+    timelineProgressInterval = setInterval(renderTimelineState, 1000)
+  }
+}
+
+function renderTimelineState() {
+  const times = lastPrayerTimes
+  if (!times) return
+
   const now = new Date()
-  const currentMinutes = now.getHours() * 60 + now.getMinutes()
+  const currentMinutes = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60
 
   const tlItems = document.querySelectorAll('.timeline-item')
   const prayerKeys = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
 
-  let nextFound = false
-  prayerKeys.forEach((key, i) => {
+  // Her vakit için dakika değerini hesapla
+  const prayerMinutesArr = prayerKeys.map(key => {
     const timeStr = times[key]
-    if (!timeStr || !tlItems[i]) return
-
+    if (!timeStr) return 0
     const [h, m] = timeStr.split(':').map(Number)
-    const prayerMinutes = h * 60 + m
+    return h * 60 + m
+  })
+
+  let nextFound = false
+  let lastPassedIndex = -1
+
+  prayerKeys.forEach((key, i) => {
+    if (!tlItems[i]) return
+
     const dot = tlItems[i].querySelector('.tl-dot')
     const status = tlItems[i].querySelector('.tl-status')
+    const lineFill = tlItems[i].querySelector('.tl-line-fill')
 
     // Temizle
     dot.classList.remove('tl-done', 'tl-current')
-    tlItems[i].classList.remove('tl-passed', 'tl-next')
+    tlItems[i].classList.remove('tl-passed', 'tl-next', 'tl-progressing')
     if (status) status.textContent = ''
+    if (lineFill) lineFill.style.width = '0%'
 
-    if (isTomorrow) {
-      // Yarının vakitleri: ilki sırada, geri kalanı beklemede
+    if (lastIsTomorrow) {
       if (!nextFound) {
         dot.classList.add('tl-current')
         tlItems[i].classList.add('tl-next')
@@ -331,10 +361,12 @@ function updateTimelineDots(times, isTomorrow = false) {
         nextFound = true
       }
     } else {
-      if (currentMinutes >= prayerMinutes) {
+      if (currentMinutes >= prayerMinutesArr[i]) {
         dot.classList.add('tl-done')
         tlItems[i].classList.add('tl-passed')
         if (status) status.textContent = 'Geçti'
+        if (lineFill) lineFill.style.width = '100%'
+        lastPassedIndex = i
       } else if (!nextFound) {
         dot.classList.add('tl-current')
         tlItems[i].classList.add('tl-next')
@@ -343,6 +375,25 @@ function updateTimelineDots(times, isTomorrow = false) {
       }
     }
   })
+
+  // İlerleme çizgisini hesapla (son geçen → sıradaki arası)
+  if (!lastIsTomorrow && lastPassedIndex >= 0 && lastPassedIndex < prayerKeys.length - 1) {
+    const fromMinutes = prayerMinutesArr[lastPassedIndex]
+    const toMinutes = prayerMinutesArr[lastPassedIndex + 1]
+    const totalSpan = toMinutes - fromMinutes
+
+    if (totalSpan > 0) {
+      const elapsed = currentMinutes - fromMinutes
+      const progress = Math.min(Math.max(elapsed / totalSpan, 0), 1) * 100
+
+      const progressItem = tlItems[lastPassedIndex]
+      const lineFill = progressItem?.querySelector('.tl-line-fill')
+      if (lineFill) {
+        lineFill.style.width = `${progress}%`
+        progressItem.classList.add('tl-progressing')
+      }
+    }
+  }
 }
 
 // Toggle endpoint'ini çağır
